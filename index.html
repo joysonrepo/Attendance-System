@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sunday School Attendance</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 1rem;
+    }
+    .container { 
+      max-width: 600px; 
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+      overflow: hidden;
+    }
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 2rem 1.5rem;
+      text-align: center;
+    }
+    .header-logo {
+      width: 80px;
+      height: 80px;
+      margin: 0 auto 1rem;
+      background: rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .header-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    h1 { 
+      font-size: 1.8rem; 
+      font-weight: 700;
+      margin-bottom: 0.3rem;
+    }
+    .header-subtitle {
+      font-size: 0.95rem;
+      opacity: 0.9;
+    }
+    .content { padding: 1.5rem; }
+    fieldset { 
+      border: none;
+      padding: 1.3rem;
+      margin-bottom: 1.2rem;
+      background: #f8f9ff;
+      border-radius: 12px;
+      border-left: 4px solid #667eea;
+    }
+    legend { 
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #333;
+      margin-bottom: 0.8rem;
+    }
+    label { 
+      display: block; 
+      margin-top: 0.8rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: #444;
+    }
+    input[type=text], input[type=number] { 
+      width: 100%; 
+      padding: 0.75rem;
+      margin-top: 0.4rem;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.3s;
+    }
+    input[type=text]:focus, input[type=number]:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    #nameSuggestions { 
+      position: absolute;
+      background: #fff;
+      border: 2px solid #667eea;
+      width: 100%;
+      z-index: 10;
+      max-height: 200px;
+      overflow-y: auto;
+      border-radius: 8px;
+      margin-top: 0.3rem;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    #nameSuggestions div { 
+      padding: 0.6rem 0.8rem;
+      cursor: pointer;
+      font-size: 0.95rem;
+      transition: background 0.2s;
+    }
+    #nameSuggestions div:hover { 
+      background: #e6f0ff;
+      color: #667eea;
+    }
+    .hidden { display: none !important; }
+    .type-toggle { 
+      display: flex;
+      gap: 1rem;
+      margin: 0.5rem 0;
+    }
+    .type-toggle label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-top: 0;
+      font-weight: 500;
+      cursor: pointer;
+    }
+    .type-toggle input[type=radio] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+    .button-group {
+      display: flex;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+      margin-top: 1.5rem;
+    }
+    button { 
+      flex: 1;
+      min-width: 140px;
+      padding: 0.9rem 1.2rem;
+      cursor: pointer;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.3s;
+    }
+    #submitBtn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    #submitBtn:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+    }
+    #refreshBtn, #statsBtn, #clearBtn {
+      background: #f0f0f0;
+      color: #333;
+      border: 2px solid #e0e0e0;
+    }
+    #refreshBtn:hover, #statsBtn:hover, #clearBtn:hover {
+      background: #e0e0e0;
+      border-color: #d0d0d0;
+    }
+    button:disabled { 
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    .status { 
+      margin-top: 1rem;
+      padding: 0.8rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 500;
+    }
+    .status:empty { display: none; }
+    #stats { 
+      margin-top: 1.5rem;
+      padding-top: 1.5rem;
+      border-top: 2px solid #e0e0e0;
+    }
+    #stats h2 {
+      font-size: 1.3rem;
+      color: #333;
+      margin-bottom: 1rem;
+    }
+    table { 
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th, td { 
+      border: 1px solid #e0e0e0;
+      padding: 0.8rem;
+      text-align: left;
+      font-size: 0.95rem;
+    }
+    th { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      font-weight: 600;
+    }
+    tr:hover {
+      background: #f8f9ff;
+    }
+    .flex-line { 
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    .pill { 
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+
+    /* Mobile tweaks */
+    @media (max-width: 640px) {
+      body { padding: 0.5rem; }
+      .container { border-radius: 12px; }
+      .header { padding: 1.5rem 1rem; }
+      .header-logo { width: 70px; height: 70px; }
+      h1 { font-size: 1.4rem; }
+      .content { padding: 1rem; }
+      .type-toggle { flex-direction: column; gap: 0.5rem; }
+      .button-group { gap: 0.6rem; }
+      button { min-width: 100%; }
+      table { font-size: 0.85rem; }
+      th, td { padding: 0.6rem 0.4rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-logo">
+        <img src="kids_logo-removebg-preview.png" alt="Kids Logo" />
+      </div>
+      <h1>River Kids Attendance</h1>
+      <p class="header-subtitle">Record and manage student attendance</p>
+    </div>
+    <div class="content">
+      <fieldset>
+        <legend>Student Type</legend>
+        <div class="type-toggle">
+          <label><input type="radio" name="studentType" value="old" checked /> Existing Student</label>
+          <label><input type="radio" name="studentType" value="new" /> New Student</label>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Student Information</legend>
+        <div style="position:relative;">
+          <label for="nameInput">Name</label>
+          <input id="nameInput" type="text" autocomplete="off" placeholder="Start typing name..." />
+          <div id="nameSuggestions" class="hidden"></div>
+        </div>
+        <label for="ageInput">Age</label>
+        <input id="ageInput" type="number" min="1" placeholder="Enter age" />
+        <label for="phoneInput">Phone Number</label>
+        <input id="phoneInput" type="text" placeholder="Enter phone" />
+        <label for="genderInput">Gender</label>
+        <input id="genderInput" type="text" placeholder="M / F" />
+        <label for="placeInput">Place</label>
+        <input id="placeInput" type="text" placeholder="Enter place" />
+      </fieldset>
+
+      <fieldset>
+        <legend>Today's Attendance</legend>
+        <div class="type-toggle">
+          <label><input type="radio" name="attendance" value="Present" checked /> Present</label>
+          <label><input type="radio" name="attendance" value="Absent" /> Absent</label>
+        </div>
+      </fieldset>
+
+      <div class="button-group">
+        <button id="submitBtn" disabled>Submit Attendance</button>
+        <button id="refreshBtn" type="button" title="Reload student list">Reload</button>
+        <button id="statsBtn" type="button" title="Show today stats">Stats</button>
+        <button id="clearBtn" type="button" title="Clear form">Clear</button>
+      </div>
+      <div id="status" class="status"></div>
+
+      <div id="stats" class="hidden">
+        <h2>Today's Attendance Summary</h2>
+        <div id="statsSummary"></div>
+        <table id="statsTable">
+          <thead><tr><th>Name</th><th>Age</th><th>Group</th><th>Status</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+<script>
+const WEB_APP_BASE = 'https://script.google.com/macros/s/AKfycbwqbS7g9iauLAUcoo-OFyOTED8C-eOReiyLwJoE1pHYCR24OY6CZ_lcZUtt_rzV_6Fb/exec'; // No trailing slash.
+/* Expected endpoints:
+GET    WEB_APP_BASE + '/students' -> [{id,rowIndex,name,age,phone,gender,place}]
+POST   WEB_APP_BASE + '/attendance' body: {rowIndex,date,status}
+POST   WEB_APP_BASE + '/newStudent' body: {name,age,phone,gender,place,date,status}
+GET    WEB_APP_BASE + '/stats?date=YYYY-MM-DD' -> {date, counts:{total,present,absent,group:{g1:{present,absent},g2:{...},g3:{...}}}, list:[{name,age,status,group}]}
+*/
+
+let students = []; // cached list
+let selectedStudent = null;
+
+const els = {
+  nameInput: document.getElementById('nameInput'),
+  nameSuggestions: document.getElementById('nameSuggestions'),
+  age: document.getElementById('ageInput'),
+  phone: document.getElementById('phoneInput'),
+  gender: document.getElementById('genderInput'),
+  place: document.getElementById('placeInput'),
+  submit: document.getElementById('submitBtn'),
+  status: document.getElementById('status'),
+  stats: document.getElementById('stats'),
+  statsSummary: document.getElementById('statsSummary'),
+  statsTableBody: document.querySelector('#statsTable tbody'),
+  refresh: document.getElementById('refreshBtn'),
+  statsBtn: document.getElementById('statsBtn'),
+  clearBtn: document.getElementById('clearBtn'),
+};
+
+function todayISO() {
+  return new Date().toISOString().slice(0,10);
+}
+
+function groupForAge(age) {
+  if (age >=4 && age <=7) return '4-7';
+  if (age >=8 && age <=12) return '8-12';
+  return '13+';
+}
+
+async function fetchStudents() {
+  setStatus('Loading students...');
+  try {
+    const res = await fetch(WEB_APP_BASE + '?path=students');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const payload = await res.json();
+    students = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.list) ? payload.list : []);
+    setStatus('Loaded ' + (Array.isArray(students) ? students.length : 0) + ' students.');
+    enableSubmitIfReady();
+  } catch (e) {
+    setStatus('Failed to load students: ' + e.message, true);
+  }
+}
+
+function setStatus(msg, isError=false) {
+  els.status.textContent = msg;
+  els.status.style.color = isError ? '#c00' : '#0a4a0a';
+}
+
+function enableSubmitIfReady() {
+  const type = getStudentType();
+  if (type === 'old') {
+    els.submit.disabled = !selectedStudent;
+  } else {
+    // For new student ensure minimal fields
+    const ok = els.nameInput.value.trim() && els.age.value.trim() && els.gender.value.trim();
+    els.submit.disabled = !ok;
+  }
+}
+
+function getStudentType() {
+  return document.querySelector('input[name=studentType]:checked').value;
+}
+
+function clearStudentFields() {
+  els.age.value = '';
+  els.phone.value = '';
+  els.gender.value = '';
+  els.place.value = '';
+}
+
+function clearForm() {
+  els.nameInput.value = '';
+  clearStudentFields();
+  hideSuggestions();
+  selectedStudent = null;
+  els.submit.disabled = true;
+  setStatus('');
+  // Reset attendance to Present
+  const presentRadio = document.querySelector('input[name=attendance][value="Present"]');
+  if (presentRadio) presentRadio.checked = true;
+}
+
+function fillStudentFields(stu) {
+  els.age.value = stu.age || '';
+  els.phone.value = stu.phone || '';
+  els.gender.value = stu.gender || '';
+  els.place.value = stu.place || '';
+}
+
+// Autocomplete logic
+let suggestionHideTimer = null;
+els.nameInput.addEventListener('input', () => {
+  const val = els.nameInput.value.trim().toLowerCase();
+  selectedStudent = null;
+  if (!val || getStudentType() !== 'old') {
+    hideSuggestions();
+    enableSubmitIfReady();
+    return;
+  }
+  const list = Array.isArray(students) ? students : [];
+  const matches = list.filter(s => String(s.name || '').toLowerCase().includes(val)).slice(0,25);
+  renderSuggestions(matches);
+});
+
+function renderSuggestions(list) {
+  if (!list.length) { hideSuggestions(); return; }
+  els.nameSuggestions.innerHTML = list.map(s => `<div data-id="${s.id}" data-row="${s.rowIndex}">${s.name}</div>`).join('');
+  els.nameSuggestions.classList.remove('hidden');
+}
+
+function hideSuggestions() {
+  els.nameSuggestions.classList.add('hidden');
+  els.nameSuggestions.innerHTML = '';
+}
+
+els.nameSuggestions.addEventListener('click', e => {
+  const div = e.target.closest('div[data-id]');
+  if (!div) return;
+  const id = div.dataset.id;
+  selectedStudent = students.find(s => String(s.id) === String(id));
+  if (selectedStudent) {
+    els.nameInput.value = selectedStudent.name;
+    fillStudentFields(selectedStudent);
+    hideSuggestions();
+    enableSubmitIfReady();
+  }
+});
+
+// Switching between new / old student
+Array.from(document.querySelectorAll('input[name=studentType]')).forEach(r => {
+  r.addEventListener('change', () => {
+    selectedStudent = null;
+    if (getStudentType() === 'old') {
+      clearStudentFields();
+      els.submit.disabled = true;
+    } else {
+      clearStudentFields();
+      els.submit.disabled = true;
+    }
+    enableSubmitIfReady();
+  });
+});
+
+['ageInput','phoneInput','genderInput','placeInput'].forEach(id => {
+  document.getElementById(id).addEventListener('input', enableSubmitIfReady);
+});
+
+els.refresh.addEventListener('click', fetchStudents);
+els.statsBtn.addEventListener('click', loadStats);
+els.clearBtn.addEventListener('click', () => { clearForm(); enableSubmitIfReady(); });
+
+async function submitAttendance() {
+  const type = getStudentType();
+  const attendanceStatus = document.querySelector('input[name=attendance]:checked').value;
+  const date = todayISO();
+  setStatus('Saving...');
+  els.submit.disabled = true;
+  let endpoint, payload;
+  if (type === 'old') {
+    if (!selectedStudent) { setStatus('Select a student first.', true); els.submit.disabled = false; return; }
+    endpoint = '?path=attendance';
+    payload = { rowIndex: selectedStudent.rowIndex, date, status: attendanceStatus };
+  } else {
+    endpoint = '?path=newStudent';
+    payload = {
+      name: els.nameInput.value.trim(),
+      age: Number(els.age.value),
+      phone: els.phone.value.trim(),
+      gender: els.gender.value.trim(),
+      place: els.place.value.trim(),
+      date,
+      status: attendanceStatus
+    };
+  }
+  try {
+    const res = await fetch(WEB_APP_BASE + endpoint, { 
+      method:'POST', 
+      headers:{'Content-Type':'text/plain'}, 
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    setStatus('✓ Saved successfully'); 
+    clearForm();
+    // Don't reload student list; just clear the form instantly for UX
+    if (type === 'new') {
+      // Reload students in background (non-blocking) for future autocomplete
+      fetchStudents();
+    }
+  } catch (e) {
+    setStatus('Failed: ' + e.message, true);
+  } finally {
+    els.submit.disabled = false;
+  }
+}
+
+els.submit.addEventListener('click', submitAttendance);
+
+async function loadStats() {
+  const date = todayISO();
+  setStatus('Loading stats for ' + date + '...');
+  try {
+    const res = await fetch(WEB_APP_BASE + '?path=stats&date=' + date);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const stats = await res.json();
+    renderStats(stats);
+    setStatus('Stats loaded.');
+  } catch (e) {
+    setStatus('Failed to load stats: ' + e.message, true);
+  }
+}
+
+function renderStats(stats) {
+  els.stats.classList.remove('hidden');
+  const g = stats.counts.group;
+  els.statsSummary.innerHTML = `
+    <div class="flex-line">
+      <span class="pill">Date: ${stats.date}</span>
+      <span class="pill">Present: ${stats.counts.present}</span>
+      <span class="pill">Absent: ${stats.counts.absent}</span>
+      <span class="pill">4-7 P:${g.g1.present} A:${g.g1.absent}</span>
+      <span class="pill">8-12 P:${g.g2.present} A:${g.g2.absent}</span>
+      <span class="pill">13+ P:${g.g3.present} A:${g.g3.absent}</span>
+    </div>`;
+  els.statsTableBody.innerHTML = stats.list.map(s => `<tr><td>${s.name}</td><td>${s.age}</td><td>${s.group}</td><td>${s.status}</td></tr>`).join('');
+}
+
+// Initial load
+fetchStudents();
+</script>
+</body>
+</html>
