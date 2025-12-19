@@ -73,7 +73,7 @@
       font-weight: 600;
       color: #444;
     }
-    input[type=text], input[type=number] { 
+    input[type=text], input[type=number], select { 
       width: 100%; 
       padding: 0.75rem;
       margin-top: 0.4rem;
@@ -82,10 +82,14 @@
       font-size: 1rem;
       transition: border-color 0.3s;
     }
-    input[type=text]:focus, input[type=number]:focus {
+    input[type=text]:focus, input[type=number]:focus, select:focus {
       outline: none;
       border-color: #667eea;
       box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    select {
+      cursor: pointer;
+      background-color: white;
     }
     #nameSuggestions { 
       position: absolute;
@@ -246,6 +250,13 @@
     </div>
     <div class="content">
       <fieldset>
+        <legend>Select Group</legend>
+        <div class="type-toggle">
+          <label><input type="radio" name="groupSelect" value="Church" checked /> Church</label>
+          <label><input type="radio" name="groupSelect" value="RFF" /> RFF</label>
+        </div>
+      </fieldset>
+      <fieldset>
         <legend>Student Type</legend>
         <div class="type-toggle">
           <label><input type="radio" name="studentType" value="old" checked /> Existing Student</label>
@@ -265,9 +276,20 @@
         <label for="phoneInput">Phone Number</label>
         <input id="phoneInput" type="text" placeholder="Enter phone" />
         <label for="genderInput">Gender</label>
-        <input id="genderInput" type="text" placeholder="M / F" />
+        <select id="genderInput">
+          <option value="">Select Gender</option>
+          <option value="Male">Male</option>
+          <option value="Female">Female</option>
+          <option value="Other">Other</option>
+        </select>
         <label for="placeInput">Place</label>
-        <input id="placeInput" type="text" placeholder="Enter place" />
+        <select id="placeSelect">
+          <option value="">Select Place</option>
+          <option value="MG Palaya">MG Palaya</option>
+          <option value="SS Palaya">SS Palaya</option>
+          <option value="Other">Other</option>
+        </select>
+        <input id="placeInput" type="text" placeholder="Enter custom place" class="hidden" />
       </fieldset>
 
       <fieldset>
@@ -298,7 +320,7 @@
   </div>
 
 <script>
-const WEB_APP_BASE = 'https://script.google.com/macros/s/AKfycbwqbS7g9iauLAUcoo-OFyOTED8C-eOReiyLwJoE1pHYCR24OY6CZ_lcZUtt_rzV_6Fb/exec'; // No trailing slash.
+const WEB_APP_BASE = 'https://script.google.com/macros/s/AKfycbxFDBi8fJUUoeKQKtg44ptMIInXCyx7w4C8fjTY5iOIdXMFEGhK9qKdo6CjZcbJyeu-/exec'; // No trailing slash.
 /* Expected endpoints:
 GET    WEB_APP_BASE + '/students' -> [{id,rowIndex,name,age,phone,gender,place}]
 POST   WEB_APP_BASE + '/attendance' body: {rowIndex,date,status}
@@ -315,6 +337,7 @@ const els = {
   age: document.getElementById('ageInput'),
   phone: document.getElementById('phoneInput'),
   gender: document.getElementById('genderInput'),
+  placeSelect: document.getElementById('placeSelect'),
   place: document.getElementById('placeInput'),
   submit: document.getElementById('submitBtn'),
   status: document.getElementById('status'),
@@ -336,10 +359,15 @@ function groupForAge(age) {
   return '13+';
 }
 
+function getSelectedGroup() {
+  return document.querySelector('input[name=groupSelect]:checked').value;
+}
+
 async function fetchStudents() {
-  setStatus('Loading students...');
+  const group = getSelectedGroup();
+  setStatus('Loading students from ' + group + '...');
   try {
-    const res = await fetch(WEB_APP_BASE + '?path=students');
+    const res = await fetch(WEB_APP_BASE + '?path=students&group=' + group);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const payload = await res.json();
     students = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.list) ? payload.list : []);
@@ -374,7 +402,9 @@ function clearStudentFields() {
   els.age.value = '';
   els.phone.value = '';
   els.gender.value = '';
+  els.placeSelect.value = '';
   els.place.value = '';
+  els.place.classList.add('hidden');
 }
 
 function clearForm() {
@@ -392,8 +422,30 @@ function clearForm() {
 function fillStudentFields(stu) {
   els.age.value = stu.age || '';
   els.phone.value = stu.phone || '';
-  els.gender.value = stu.gender || '';
-  els.place.value = stu.place || '';
+  
+  // Normalize gender
+  const gender = (stu.gender || '').toLowerCase();
+  if (gender === 'male' || gender === 'm') els.gender.value = 'Male';
+  else if (gender === 'female' || gender === 'f') els.gender.value = 'Female';
+  else els.gender.value = stu.gender || '';
+  
+  // Normalize and set place
+  const place = (stu.place || '').trim();
+  const placeNorm = place.toLowerCase().replace(/\s+/g, ' ');
+  if (placeNorm.includes('mg') || placeNorm.includes('m g')) {
+    els.placeSelect.value = 'MG Palaya';
+    els.place.classList.add('hidden');
+  } else if (placeNorm.includes('ss') || placeNorm.includes('s s')) {
+    els.placeSelect.value = 'SS Palaya';
+    els.place.classList.add('hidden');
+  } else if (place) {
+    els.placeSelect.value = 'Other';
+    els.place.value = place;
+    els.place.classList.remove('hidden');
+  } else {
+    els.placeSelect.value = '';
+    els.place.classList.add('hidden');
+  }
 }
 
 // Autocomplete logic
@@ -435,6 +487,14 @@ els.nameSuggestions.addEventListener('click', e => {
   }
 });
 
+// Switching between Church / RFF
+Array.from(document.querySelectorAll('input[name=groupSelect]')).forEach(r => {
+  r.addEventListener('change', () => {
+    clearForm();
+    fetchStudents();
+  });
+});
+
 // Switching between new / old student
 Array.from(document.querySelectorAll('input[name=studentType]')).forEach(r => {
   r.addEventListener('change', () => {
@@ -454,6 +514,18 @@ Array.from(document.querySelectorAll('input[name=studentType]')).forEach(r => {
   document.getElementById(id).addEventListener('input', enableSubmitIfReady);
 });
 
+// Handle place dropdown change
+els.placeSelect.addEventListener('change', () => {
+  if (els.placeSelect.value === 'Other') {
+    els.place.classList.remove('hidden');
+    els.place.focus();
+  } else {
+    els.place.classList.add('hidden');
+    els.place.value = '';
+  }
+  enableSubmitIfReady();
+});
+
 els.refresh.addEventListener('click', fetchStudents);
 els.statsBtn.addEventListener('click', loadStats);
 els.clearBtn.addEventListener('click', () => { clearForm(); enableSubmitIfReady(); });
@@ -461,43 +533,75 @@ els.clearBtn.addEventListener('click', () => { clearForm(); enableSubmitIfReady(
 async function submitAttendance() {
   const type = getStudentType();
   const attendanceStatus = document.querySelector('input[name=attendance]:checked').value;
+  const group = getSelectedGroup();
   const date = todayISO();
-  setStatus('Saving...');
+  
+  // Prevent multiple submissions
+  if (els.submit.disabled) return;
+  
+  setStatus('⏳ Saving...');
   els.submit.disabled = true;
+  
   let endpoint, payload;
   if (type === 'old') {
     if (!selectedStudent) { setStatus('Select a student first.', true); els.submit.disabled = false; return; }
     endpoint = '?path=attendance';
-    payload = { rowIndex: selectedStudent.rowIndex, date, status: attendanceStatus };
+    payload = { rowIndex: selectedStudent.rowIndex, date, status: attendanceStatus, group };
   } else {
     endpoint = '?path=newStudent';
+    const placeValue = els.placeSelect.value === 'Other' ? els.place.value.trim() : els.placeSelect.value;
     payload = {
       name: els.nameInput.value.trim(),
       age: Number(els.age.value),
       phone: els.phone.value.trim(),
       gender: els.gender.value.trim(),
-      place: els.place.value.trim(),
+      place: placeValue,
       date,
-      status: attendanceStatus
+      status: attendanceStatus,
+      group
     };
   }
+  
+  // Timeout warning after 3 seconds
+  const timeoutWarning = setTimeout(() => {
+    setStatus('⏳ Still processing... Google Sheets can be slow sometimes.');
+  }, 3000);
+  
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 sec timeout
+    
     const res = await fetch(WEB_APP_BASE + endpoint, { 
       method:'POST', 
       headers:{'Content-Type':'text/plain'}, 
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
+    clearTimeout(timeoutWarning);
+    
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    setStatus('✓ Saved successfully'); 
-    clearForm();
-    // Don't reload student list; just clear the form instantly for UX
+    setStatus('✓ Saved successfully!'); 
+    
+    // Clear form immediately for better UX
+    setTimeout(() => {
+      clearForm();
+      setStatus('');
+    }, 1000);
+    
+    // Reload students in background for new student
     if (type === 'new') {
-      // Reload students in background (non-blocking) for future autocomplete
       fetchStudents();
     }
   } catch (e) {
-    setStatus('Failed: ' + e.message, true);
+    clearTimeout(timeoutWarning);
+    if (e.name === 'AbortError') {
+      setStatus('⚠ Request timed out. Please check your internet connection.', true);
+    } else {
+      setStatus('❌ Failed: ' + e.message, true);
+    }
   } finally {
     els.submit.disabled = false;
   }
@@ -506,10 +610,11 @@ async function submitAttendance() {
 els.submit.addEventListener('click', submitAttendance);
 
 async function loadStats() {
+  const group = getSelectedGroup();
   const date = todayISO();
-  setStatus('Loading stats for ' + date + '...');
+  setStatus('Loading stats for ' + date + ' (' + group + ')...');
   try {
-    const res = await fetch(WEB_APP_BASE + '?path=stats&date=' + date);
+    const res = await fetch(WEB_APP_BASE + '?path=stats&date=' + date + '&group=' + group);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const stats = await res.json();
     renderStats(stats);
