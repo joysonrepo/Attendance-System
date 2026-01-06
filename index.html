@@ -271,8 +271,23 @@
           <input id="nameInput" type="text" autocomplete="off" placeholder="Start typing name..." />
           <div id="nameSuggestions" class="hidden"></div>
         </div>
-        <label for="ageInput">Age</label>
-        <input id="ageInput" type="number" min="1" placeholder="Enter age" />
+        <label for="classInput">Class</label>
+        <select id="classInput">
+          <option value="">Select Class</option>
+          <option value="KG">KG</option>
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+          <option value="11">11</option>
+          <option value="12">12</option>
+        </select>
         <label for="phoneInput">Phone Number</label>
         <input id="phoneInput" type="text" placeholder="Enter phone" />
         <label for="genderInput">Gender</label>
@@ -312,15 +327,24 @@
         <h2>Today's Attendance Summary</h2>
         <div id="statsSummary"></div>
         <table id="statsTable">
-          <thead><tr><th>Name</th><th>Age</th><th>Group</th><th>Status</th></tr></thead>
+          <thead><tr><th>Name</th><th>Class</th><th>Group</th><th>Status</th></tr></thead>
           <tbody></tbody>
         </table>
       </div>
+
+      <fieldset style="margin-top: 1.5rem;">
+        <legend>Download Report</legend>
+        <label for="dateSelect">Select Date</label>
+        <select id="dateSelect">
+          <option value="">Select a date...</option>
+        </select>
+        <button id="downloadBtn" style="margin-top: 1rem; width: 100%;" disabled>Download Report</button>
+      </fieldset>
     </div>
   </div>
 
 <script>
-const WEB_APP_BASE = 'https://script.google.com/macros/s/AKfycbxFDBi8fJUUoeKQKtg44ptMIInXCyx7w4C8fjTY5iOIdXMFEGhK9qKdo6CjZcbJyeu-/exec'; // No trailing slash.
+const WEB_APP_BASE = 'https://script.google.com/macros/s/AKfycbxhOUmTby4MOkVw0-WGV_BDBhxFSLod1MOoaNU05gDVWWLNiQpmtnPz35DvYlblbCeN/exec'; // No trailing slash.
 /* Expected endpoints:
 GET    WEB_APP_BASE + '/students' -> [{id,rowIndex,name,age,phone,gender,place}]
 POST   WEB_APP_BASE + '/attendance' body: {rowIndex,date,status}
@@ -334,7 +358,7 @@ let selectedStudent = null;
 const els = {
   nameInput: document.getElementById('nameInput'),
   nameSuggestions: document.getElementById('nameSuggestions'),
-  age: document.getElementById('ageInput'),
+  classInput: document.getElementById('classInput'),
   phone: document.getElementById('phoneInput'),
   gender: document.getElementById('genderInput'),
   placeSelect: document.getElementById('placeSelect'),
@@ -347,16 +371,19 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
   statsBtn: document.getElementById('statsBtn'),
   clearBtn: document.getElementById('clearBtn'),
+  dateSelect: document.getElementById('dateSelect'),
+  downloadBtn: document.getElementById('downloadBtn'),
 };
 
 function todayISO() {
   return new Date().toISOString().slice(0,10);
 }
 
-function groupForAge(age) {
-  if (age >=4 && age <=7) return '4-7';
-  if (age >=8 && age <=12) return '8-12';
-  return '13+';
+function groupForClass(studentClass) {
+  const c = String(studentClass).toUpperCase();
+  if (c === 'KG' || c === '1' || c === '2' || c === '3') return 'Junior';
+  if (c === '4' || c === '5' || c === '6') return 'Inter';
+  return 'Senior';
 }
 
 function getSelectedGroup() {
@@ -389,7 +416,7 @@ function enableSubmitIfReady() {
     els.submit.disabled = !selectedStudent;
   } else {
     // For new student ensure minimal fields
-    const ok = els.nameInput.value.trim() && els.age.value.trim() && els.gender.value.trim();
+    const ok = els.nameInput.value.trim() && els.classInput.value.trim() && els.gender.value.trim();
     els.submit.disabled = !ok;
   }
 }
@@ -399,7 +426,7 @@ function getStudentType() {
 }
 
 function clearStudentFields() {
-  els.age.value = '';
+  els.classInput.value = '';
   els.phone.value = '';
   els.gender.value = '';
   els.placeSelect.value = '';
@@ -420,7 +447,7 @@ function clearForm() {
 }
 
 function fillStudentFields(stu) {
-  els.age.value = stu.age || '';
+  els.classInput.value = stu.class || '';
   els.phone.value = stu.phone || '';
   
   // Normalize gender
@@ -492,6 +519,7 @@ Array.from(document.querySelectorAll('input[name=groupSelect]')).forEach(r => {
   r.addEventListener('change', () => {
     clearForm();
     fetchStudents();
+    loadAvailableDates();
   });
 });
 
@@ -510,7 +538,7 @@ Array.from(document.querySelectorAll('input[name=studentType]')).forEach(r => {
   });
 });
 
-['ageInput','phoneInput','genderInput','placeInput'].forEach(id => {
+['classInput','phoneInput','genderInput','placeInput'].forEach(id => {
   document.getElementById(id).addEventListener('input', enableSubmitIfReady);
 });
 
@@ -552,7 +580,7 @@ async function submitAttendance() {
     const placeValue = els.placeSelect.value === 'Other' ? els.place.value.trim() : els.placeSelect.value;
     payload = {
       name: els.nameInput.value.trim(),
-      age: Number(els.age.value),
+      studentClass: els.classInput.value.trim(),
       phone: els.phone.value.trim(),
       gender: els.gender.value.trim(),
       place: placeValue,
@@ -632,15 +660,132 @@ function renderStats(stats) {
       <span class="pill">Date: ${stats.date}</span>
       <span class="pill">Present: ${stats.counts.present}</span>
       <span class="pill">Absent: ${stats.counts.absent}</span>
-      <span class="pill">4-7 P:${g.g1.present} A:${g.g1.absent}</span>
-      <span class="pill">8-12 P:${g.g2.present} A:${g.g2.absent}</span>
-      <span class="pill">13+ P:${g.g3.present} A:${g.g3.absent}</span>
+      <span class="pill">Junior (KG-3) P:${g.junior.present} A:${g.junior.absent}</span>
+      <span class="pill">Inter (4-6) P:${g.inter.present} A:${g.inter.absent}</span>
+      <span class="pill">Senior (7-12) P:${g.senior.present} A:${g.senior.absent}</span>
     </div>`;
-  els.statsTableBody.innerHTML = stats.list.map(s => `<tr><td>${s.name}</td><td>${s.age}</td><td>${s.group}</td><td>${s.status}</td></tr>`).join('');
+  els.statsTableBody.innerHTML = stats.list.map(s => `<tr><td>${s.name}</td><td>${s.class}</td><td>${s.group}</td><td>${s.status}</td></tr>`).join('');
 }
 
 // Initial load
 fetchStudents();
+loadAvailableDates();
+
+// Load available dates for report download
+async function loadAvailableDates() {
+  const group = getSelectedGroup();
+  try {
+    const res = await fetch(WEB_APP_BASE + '?path=dates&group=' + group);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (data.dates && data.dates.length > 0) {
+      els.dateSelect.innerHTML = '<option value="">Select a date...</option>' + 
+        data.dates.map(d => `<option value="${d}">${d}</option>`).join('');
+    }
+  } catch (e) {
+    console.error('Failed to load dates:', e);
+  }
+}
+
+// Enable download button when date is selected
+els.dateSelect.addEventListener('change', () => {
+  els.downloadBtn.disabled = !els.dateSelect.value;
+});
+
+// Download report
+els.downloadBtn.addEventListener('click', async () => {
+  const date = els.dateSelect.value;
+  const group = getSelectedGroup();
+  
+  if (!date) {
+    setStatus('Please select a date', true);
+    return;
+  }
+  
+  setStatus('Generating report...');
+  els.downloadBtn.disabled = true;
+  
+  try {
+    const res = await fetch(WEB_APP_BASE + '?path=report&date=' + date + '&group=' + group);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const report = await res.json();
+    
+    // Format date for display
+    const dateObj = new Date(date + 'T00:00:00');
+    const displayDate = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    
+    // Filter only "Present" students and generate three-column layout
+    let juniorRows = '';
+    const juniorPresent = report.junior.filter(s => s.status === 'Present');
+    if (juniorPresent.length === 0) {
+      juniorRows = '<div style="text-align:center; color:#999; font-style:italic; padding:20px; grid-column: 1/-1;">No present students</div>';
+    } else {
+      juniorPresent.forEach(s => {
+        juniorRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + '</div>';
+      });
+    }
+    
+    let interRows = '';
+    const interPresent = report.inter.filter(s => s.status === 'Present');
+    if (interPresent.length === 0) {
+      interRows = '<div style="text-align:center; color:#999; font-style:italic; padding:20px; grid-column: 1/-1;">No present students</div>';
+    } else {
+      interPresent.forEach(s => {
+        interRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + '</div>';
+      });
+    }
+    
+    let seniorRows = '';
+    const seniorPresent = report.senior.filter(s => s.status === 'Present');
+    if (seniorPresent.length === 0) {
+      seniorRows = '<div style="text-align:center; color:#999; font-style:italic; padding:20px; grid-column: 1/-1;">No present students</div>';
+    } else {
+      seniorPresent.forEach(s => {
+        seniorRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + '</div>';
+      });
+    }
+    
+    const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Attendance Report - ' + displayDate + '</title><style>' +
+      'body { font-family: Arial, sans-serif; padding: 20px; max-width: 1400px; margin: 0 auto; background: #f8f9fa; }' +
+      '.container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: relative; }' +
+      '.logo-header { position: absolute; top: 20px; right: 20px; width: 100px; height: 100px; }' +
+      '.logo-header img { width: 100%; height: 100%; object-fit: contain; }' +
+      '.header-content { margin-right: 120px; }' +
+      'h1 { text-align: center; color: #333; margin: 0 0 5px 0; font-size: 28px; }' +
+      '.date-header { text-align: center; color: #666; margin-bottom: 30px; font-size: 18px; font-weight: bold; }' +
+      'h2 { color: #667eea; border-bottom: 3px solid #667eea; padding-bottom: 10px; margin-top: 30px; margin-bottom: 15px; font-size: 20px; }' +
+      '.names-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 15px; margin-bottom: 20px; }' +
+      '.name-item { padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; text-align: center; font-weight: 500; }' +
+      '.name-item:hover { background: #f0f4ff; border-color: #667eea; }' +
+      '@media print { body { background: white; } .container { box-shadow: none; } button { display: none; } @page { margin: 10mm; size: A4; } }' +
+      '</style></head><body><div class="container">' +
+      '<div class="logo-header"><img src="kids_logo-removebg-preview.png" alt="River Kids Logo" style="border-radius:8px;" onerror="this.src=\'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext x=%2250%22 y=%2265%22 font-size=%2240%22 text-anchor=%22middle%22%3E👶%3C/text%3E%3C/svg%3E\'"></div>' +
+      '<div class="header-content">' +
+      '<h1>River Kids Attendance Report</h1>' +
+      '<p class="date-header">Date: <strong>' + displayDate + '</strong> | Group: <strong>' + group + '</strong></p>' +
+      '</div>' +
+      '<h2>Junior (KG, 1, 2, 3)</h2>' +
+      '<div class="names-grid">' + juniorRows.replace(/^<div/g, '<div class="name-item').split(/<\/div>/g).join('</div>') + '</div>' +
+      '<h2>Inter (4, 5, 6)</h2>' +
+      '<div class="names-grid">' + interRows.replace(/^<div/g, '<div class="name-item').split(/<\/div>/g).join('</div>') + '</div>' +
+      '<h2>Senior (7, 8, 9, 10, 11, 12)</h2>' +
+      '<div class="names-grid">' + seniorRows.replace(/^<div/g, '<div class="name-item').split(/<\/div>/g).join('</div>') + '</div>' +
+      '</div>' +
+      '<div style="text-align: center; margin: 20px 0;"><button onclick="window.print()" style="padding: 12px 24px; font-size: 16px; cursor: pointer; background: #667eea; color: white; border: none; border-radius: 5px; margin-right: 10px;">Print Report</button></div>' +
+      '</body></html>';
+    
+    // Open report in new tab/window
+    const reportWindow = window.open('', '_blank');
+    reportWindow.document.write(html);
+    reportWindow.document.close();
+    
+    setStatus('✓ Report opened in new tab');
+    els.downloadBtn.disabled = false;
+  } catch (e) {
+    setStatus('Failed to generate report: ' + e.message, true);
+    els.downloadBtn.disabled = false;
+  }
+});
 </script>
 </body>
 </html>
