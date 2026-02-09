@@ -305,6 +305,12 @@
           <option value="Other">Other</option>
         </select>
         <input id="placeInput" type="text" placeholder="Enter custom place" class="hidden" />
+        <label for="modeOfTransport" id="modeTransportLabel" class="hidden">Mode of Transport</label>
+        <select id="modeOfTransport" class="hidden">
+          <option value="">Select Mode</option>
+          <option value="Walkin">Walkin</option>
+          <option value="Van">Van</option>
+        </select>
       </fieldset>
 
       <fieldset>
@@ -344,7 +350,7 @@
   </div>
 
 <script>
-const WEB_APP_BASE = 'https://script.google.com/macros/s/AKfycbxhOUmTby4MOkVw0-WGV_BDBhxFSLod1MOoaNU05gDVWWLNiQpmtnPz35DvYlblbCeN/exec'; // No trailing slash.
+const WEB_APP_BASE = 'https://script.google.com/macros/s/AKfycbwJB-dHjP7SSGSvydJJvsCLithjgzYg6eqrJqUSKaOWiIotVnOgdO5_xsbyacJe563P/exec';
 /* Expected endpoints:
 GET    WEB_APP_BASE + '/students' -> [{id,rowIndex,name,age,phone,gender,place}]
 POST   WEB_APP_BASE + '/attendance' body: {rowIndex,date,status}
@@ -363,6 +369,8 @@ const els = {
   gender: document.getElementById('genderInput'),
   placeSelect: document.getElementById('placeSelect'),
   place: document.getElementById('placeInput'),
+  modeOfTransport: document.getElementById('modeOfTransport'),
+  modeTransportLabel: document.getElementById('modeTransportLabel'),
   submit: document.getElementById('submitBtn'),
   status: document.getElementById('status'),
   stats: document.getElementById('stats'),
@@ -398,6 +406,7 @@ async function fetchStudents() {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const payload = await res.json();
     students = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.list) ? payload.list : []);
+    console.log('Loaded students:', students);
     setStatus('Loaded ' + (Array.isArray(students) ? students.length : 0) + ' students.');
     enableSubmitIfReady();
   } catch (e) {
@@ -412,12 +421,15 @@ function setStatus(msg, isError=false) {
 
 function enableSubmitIfReady() {
   const type = getStudentType();
+  const group = getSelectedGroup();
   if (type === 'old') {
-    els.submit.disabled = !selectedStudent;
+    const canSubmit = selectedStudent && (group !== 'Church' || els.modeOfTransport.value);
+    els.submit.disabled = !canSubmit;
   } else {
     // For new student ensure minimal fields
     const ok = els.nameInput.value.trim() && els.classInput.value.trim() && els.gender.value.trim();
-    els.submit.disabled = !ok;
+    const requiresTransport = group === 'Church' && !els.modeOfTransport.value;
+    els.submit.disabled = !ok || requiresTransport;
   }
 }
 
@@ -432,6 +444,7 @@ function clearStudentFields() {
   els.placeSelect.value = '';
   els.place.value = '';
   els.place.classList.add('hidden');
+  els.modeOfTransport.value = '';
 }
 
 function clearForm() {
@@ -447,6 +460,7 @@ function clearForm() {
 }
 
 function fillStudentFields(stu) {
+  console.log('fillStudentFields called with:', stu);
   els.classInput.value = stu.class || '';
   els.phone.value = stu.phone || '';
   
@@ -458,6 +472,7 @@ function fillStudentFields(stu) {
   
   // Normalize and set place
   const place = (stu.place || '').trim();
+  console.log('Place from student:', place);
   const placeNorm = place.toLowerCase().replace(/\s+/g, ' ');
   if (placeNorm.includes('mg') || placeNorm.includes('m g')) {
     els.placeSelect.value = 'MG Palaya';
@@ -472,6 +487,15 @@ function fillStudentFields(stu) {
   } else {
     els.placeSelect.value = '';
     els.place.classList.add('hidden');
+  }
+  
+  // Set mode of transport if Church group
+  const group = getSelectedGroup();
+  console.log('ModeOfTransport from student:', stu.modeOfTransport, 'group:', group);
+  if (group === 'Church' && stu.modeOfTransport) {
+    els.modeOfTransport.value = stu.modeOfTransport;
+  } else {
+    els.modeOfTransport.value = '';
   }
 }
 
@@ -517,6 +541,16 @@ els.nameSuggestions.addEventListener('click', e => {
 // Switching between Church / RFF
 Array.from(document.querySelectorAll('input[name=groupSelect]')).forEach(r => {
   r.addEventListener('change', () => {
+    const group = getSelectedGroup();
+    // Show mode of transport field only for Church group
+    if (group === 'Church') {
+      els.modeOfTransport.classList.remove('hidden');
+      els.modeTransportLabel.classList.remove('hidden');
+    } else {
+      els.modeOfTransport.classList.add('hidden');
+      els.modeTransportLabel.classList.add('hidden');
+      els.modeOfTransport.value = '';
+    }
     clearForm();
     fetchStudents();
     loadAvailableDates();
@@ -538,8 +572,12 @@ Array.from(document.querySelectorAll('input[name=studentType]')).forEach(r => {
   });
 });
 
-['classInput','phoneInput','genderInput','placeInput'].forEach(id => {
-  document.getElementById(id).addEventListener('input', enableSubmitIfReady);
+['classInput','phoneInput','genderInput','placeInput','placeSelect','modeOfTransport'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('input', enableSubmitIfReady);
+    el.addEventListener('change', enableSubmitIfReady);
+  }
 });
 
 // Handle place dropdown change
@@ -574,10 +612,24 @@ async function submitAttendance() {
   if (type === 'old') {
     if (!selectedStudent) { setStatus('Select a student first.', true); els.submit.disabled = false; return; }
     endpoint = '?path=attendance';
-    payload = { rowIndex: selectedStudent.rowIndex, date, status: attendanceStatus, group };
+    const modeOfTransport = group === 'Church' ? els.modeOfTransport.value : '';
+    const placeValue = els.placeSelect.value === 'Other' ? els.place.value.trim() : (els.placeSelect.value || '');
+    payload = { 
+      rowIndex: selectedStudent.rowIndex, 
+      date, 
+      status: attendanceStatus, 
+      group,
+      studentClass: els.classInput.value.trim(),
+      phone: els.phone.value.trim(),
+      gender: els.gender.value.trim(),
+      place: placeValue,
+      modeOfTransport
+    };
+    console.log('Sending payload:', payload);
   } else {
     endpoint = '?path=newStudent';
     const placeValue = els.placeSelect.value === 'Other' ? els.place.value.trim() : els.placeSelect.value;
+    const modeOfTransport = group === 'Church' ? els.modeOfTransport.value : '';
     payload = {
       name: els.nameInput.value.trim(),
       studentClass: els.classInput.value.trim(),
@@ -586,7 +638,8 @@ async function submitAttendance() {
       place: placeValue,
       date,
       status: attendanceStatus,
-      group
+      group,
+      modeOfTransport
     };
   }
   
@@ -611,7 +664,8 @@ async function submitAttendance() {
     
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const data = await res.json();
-    setStatus('✓ Saved successfully!'); 
+    console.log('Response:', data);
+    setStatus('✓ ' + (data.message || 'Saved successfully!')); 
     
     // Clear form immediately for better UX
     setTimeout(() => {
@@ -619,10 +673,8 @@ async function submitAttendance() {
       setStatus('');
     }, 1000);
     
-    // Reload students in background for new student
-    if (type === 'new') {
-      fetchStudents();
-    }
+    // Reload students in background to get updated place and transport values
+    fetchStudents();
   } catch (e) {
     clearTimeout(timeoutWarning);
     if (e.name === 'AbortError') {
@@ -670,6 +722,13 @@ function renderStats(stats) {
 // Initial load
 fetchStudents();
 loadAvailableDates();
+
+// Show mode of transport field by default (Church is selected by default)
+const group = getSelectedGroup();
+if (group === 'Church') {
+  els.modeOfTransport.classList.remove('hidden');
+  els.modeTransportLabel.classList.remove('hidden');
+}
 
 // Load available dates for report download
 async function loadAvailableDates() {
@@ -721,7 +780,8 @@ els.downloadBtn.addEventListener('click', async () => {
       juniorRows = '<div style="text-align:center; color:#999; font-style:italic; padding:20px; grid-column: 1/-1;">No present students</div>';
     } else {
       juniorPresent.forEach(s => {
-        juniorRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + '</div>';
+        const modeText = report.group === 'Church' && s.modeOfTransport ? ' (' + s.modeOfTransport + ')' : '';
+        juniorRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + modeText + '</div>';
       });
     }
     
@@ -731,7 +791,8 @@ els.downloadBtn.addEventListener('click', async () => {
       interRows = '<div style="text-align:center; color:#999; font-style:italic; padding:20px; grid-column: 1/-1;">No present students</div>';
     } else {
       interPresent.forEach(s => {
-        interRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + '</div>';
+        const modeText = report.group === 'Church' && s.modeOfTransport ? ' (' + s.modeOfTransport + ')' : '';
+        interRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + modeText + '</div>';
       });
     }
     
@@ -741,7 +802,8 @@ els.downloadBtn.addEventListener('click', async () => {
       seniorRows = '<div style="text-align:center; color:#999; font-style:italic; padding:20px; grid-column: 1/-1;">No present students</div>';
     } else {
       seniorPresent.forEach(s => {
-        seniorRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + '</div>';
+        const modeText = report.group === 'Church' && s.modeOfTransport ? ' (' + s.modeOfTransport + ')' : '';
+        seniorRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + modeText + '</div>';
       });
     }
     
