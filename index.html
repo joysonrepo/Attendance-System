@@ -773,67 +773,85 @@ els.downloadBtn.addEventListener('click', async () => {
     const dateObj = new Date(date + 'T00:00:00');
     const displayDate = dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     
-    // Filter only "Present" students and generate three-column layout
-    let juniorRows = '';
+    // Filter only "Present" students and generate compact rows for print
     const juniorPresent = report.junior.filter(s => s.status === 'Present');
-    if (juniorPresent.length === 0) {
-      juniorRows = '<div style="text-align:center; color:#999; font-style:italic; padding:20px; grid-column: 1/-1;">No present students</div>';
-    } else {
-      juniorPresent.forEach(s => {
-        const modeText = report.group === 'Church' && s.modeOfTransport ? ' (' + s.modeOfTransport + ')' : '';
-        juniorRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + modeText + '</div>';
-      });
-    }
-    
-    let interRows = '';
     const interPresent = report.inter.filter(s => s.status === 'Present');
-    if (interPresent.length === 0) {
-      interRows = '<div style="text-align:center; color:#999; font-style:italic; padding:20px; grid-column: 1/-1;">No present students</div>';
-    } else {
-      interPresent.forEach(s => {
-        const modeText = report.group === 'Church' && s.modeOfTransport ? ' (' + s.modeOfTransport + ')' : '';
-        interRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + modeText + '</div>';
-      });
-    }
-    
-    let seniorRows = '';
     const seniorPresent = report.senior.filter(s => s.status === 'Present');
-    if (seniorPresent.length === 0) {
-      seniorRows = '<div style="text-align:center; color:#999; font-style:italic; padding:20px; grid-column: 1/-1;">No present students</div>';
-    } else {
-      seniorPresent.forEach(s => {
+
+    function renderRows(list) {
+      if (!list.length) {
+        return '<div class="empty-message">No present students</div>';
+      }
+      return list.map(s => {
         const modeText = report.group === 'Church' && s.modeOfTransport ? ' (' + s.modeOfTransport + ')' : '';
-        seniorRows += '<div style="padding:12px; border:1px solid #ddd; border-radius:4px; background:#f9f9f9;">' + s.name + modeText + '</div>';
-      });
+        return '<div class="name-item">' + s.name + modeText + '</div>';
+      }).join('');
     }
+
+    const juniorRows = renderRows(juniorPresent);
+    const interRows = renderRows(interPresent);
+    const seniorRows = renderRows(seniorPresent);
+    const totalPresentCount = juniorPresent.length + interPresent.length + seniorPresent.length;
+    const densityClass = totalPresentCount >= 80 ? 'compact' : (totalPresentCount >= 60 ? 'comfortable' : 'roomy');
     
     const html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Attendance Report - ' + displayDate + '</title><style>' +
-      'body { font-family: Arial, sans-serif; padding: 20px; max-width: 1400px; margin: 0 auto; background: #f8f9fa; }' +
-      '.container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: relative; }' +
-      '.logo-header { position: absolute; top: 20px; right: 20px; width: 100px; height: 100px; }' +
+      'body { font-family: Arial, sans-serif; padding: 16px; max-width: 1200px; margin: 0 auto; background: #f8f9fa; }' +
+      '.container { background: white; padding: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); position: relative; }' +
+      '.logo-header { position: absolute; top: 14px; right: 14px; width: 64px; height: 64px; }' +
       '.logo-header img { width: 100%; height: 100%; object-fit: contain; }' +
-      '.header-content { margin-right: 120px; }' +
-      'h1 { text-align: center; color: #333; margin: 0 0 5px 0; font-size: 28px; }' +
-      '.date-header { text-align: center; color: #666; margin-bottom: 30px; font-size: 18px; font-weight: bold; }' +
-      'h2 { color: #667eea; border-bottom: 3px solid #667eea; padding-bottom: 10px; margin-top: 30px; margin-bottom: 15px; font-size: 20px; }' +
-      '.names-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 15px; margin-bottom: 20px; }' +
-      '.name-item { padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9; text-align: center; font-weight: 500; }' +
-      '.name-item:hover { background: #f0f4ff; border-color: #667eea; }' +
-      '@media print { body { background: white; } .container { box-shadow: none; } button { display: none; } @page { margin: 10mm; size: A4; } }' +
-      '</style></head><body><div class="container">' +
+      '.header-content { margin-right: 80px; }' +
+      'h1 { text-align: center; color: #333; margin: 0 0 3px 0; font-size: 22px; }' +
+      '.date-header { text-align: center; color: #666; margin-bottom: 10px; font-size: 13px; font-weight: bold; }' +
+      '.section { margin-top: 8px; break-inside: avoid; page-break-inside: avoid; }' +
+      'h2 { color: #334; border-bottom: 1px solid #667eea; padding-bottom: 3px; margin: 0 0 5px 0; font-size: 12px; }' +
+      '.names-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 3px; margin-bottom: 6px; }' +
+      '.name-item { padding: 2px 4px; border: 1px solid #d8d8d8; border-radius: 2px; background: #fff; text-align: left; font-size: 10px; font-weight: 500; line-height: 1.25; min-height: 18px; word-break: break-word; }' +
+      '.container.roomy .name-item { font-size: 13px; padding: 4px 6px; min-height: 24px; }' +
+      '.container.roomy h2 { font-size: 13.5px; }' +
+      '.container.comfortable .name-item { font-size: 11.5px; padding: 3px 5px; min-height: 20px; }' +
+      '.container.comfortable h2 { font-size: 12.5px; }' +
+      '.container.compact .name-item { font-size: 10px; padding: 2px 4px; min-height: 18px; }' +
+      '.empty-message { text-align: center; color: #999; font-style: italic; padding: 8px; grid-column: 1/-1; font-size: 10px; }' +
+      '.total-count { margin-top: 8px; padding-top: 6px; border-top: 1px solid #cfcfcf; text-align: right; font-size: 12px; font-weight: bold; color: #333; }' +
+      '.actions { text-align: center; margin: 12px 0; }' +
+      '.print-btn { padding: 10px 22px; font-size: 14px; cursor: pointer; background: #667eea; color: white; border: none; border-radius: 5px; }' +
+      '@media print {' +
+      '  @page { margin: 5mm; size: A4; }' +
+      '  body { background: white; padding: 0; }' +
+      '  .container { box-shadow: none; border-radius: 0; padding: 6mm 5mm 4mm 5mm; }' +
+      '  .logo-header { width: 42px; height: 42px; top: 4mm; right: 5mm; }' +
+      '  .header-content { margin-right: 52px; }' +
+      '  h1 { font-size: 14px; margin: 0 0 1mm 0; }' +
+      '  .date-header { font-size: 10px; margin-bottom: 2mm; }' +
+      '  .section { margin-top: 1.2mm; }' +
+      '  h2 { margin: 0 0 1mm 0; padding-bottom: 0.6mm; }' +
+      '  .names-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1.2mm; margin-bottom: 1.2mm; }' +
+      '  .name-item { border-radius: 1px; line-height: 1.15; }' +
+      '  .container.roomy h2 { font-size: 12px; }' +
+      '  .container.roomy .name-item { font-size: 11.8px; padding: 1.5mm 1.6mm; min-height: 7mm; }' +
+      '  .container.comfortable h2 { font-size: 10.6px; }' +
+      '  .container.comfortable .name-item { font-size: 10.4px; padding: 1.1mm 1.2mm; min-height: 5.8mm; }' +
+      '  .container.compact h2 { font-size: 9px; }' +
+      '  .container.compact .name-item { font-size: 8.8px; padding: 0.7mm 1mm; min-height: 4.5mm; }' +
+      '  .empty-message { font-size: 8px; padding: 2mm; }' +
+      '  .total-count { margin-top: 1.5mm; padding-top: 1mm; font-size: 9px; }' +
+      '  .actions { display: none; }' +
+      '}' +
+      '</style></head><body><div class="container ' + densityClass + '">' +
       '<div class="logo-header"><img src="kids_logo-removebg-preview.png" alt="River Kids Logo" style="border-radius:8px;" onerror="this.src=\'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext x=%2250%22 y=%2265%22 font-size=%2240%22 text-anchor=%22middle%22%3E👶%3C/text%3E%3C/svg%3E\'"></div>' +
       '<div class="header-content">' +
       '<h1>River Kids Attendance Report</h1>' +
       '<p class="date-header">Date: <strong>' + displayDate + '</strong> | Group: <strong>' + group + '</strong></p>' +
       '</div>' +
-      '<h2>Junior (KG, 1, 2, 3)</h2>' +
-      '<div class="names-grid">' + juniorRows.replace(/^<div/g, '<div class="name-item').split(/<\/div>/g).join('</div>') + '</div>' +
-      '<h2>Inter (4, 5, 6)</h2>' +
-      '<div class="names-grid">' + interRows.replace(/^<div/g, '<div class="name-item').split(/<\/div>/g).join('</div>') + '</div>' +
-      '<h2>Senior (7, 8, 9, 10, 11, 12)</h2>' +
-      '<div class="names-grid">' + seniorRows.replace(/^<div/g, '<div class="name-item').split(/<\/div>/g).join('</div>') + '</div>' +
+      '<div class="section"><h2>Junior (KG, 1, 2, 3) - Count: ' + juniorPresent.length + '</h2>' +
+      '<div class="names-grid">' + juniorRows + '</div></div>' +
+      '<div class="section"><h2>Inter (4, 5, 6) - Count: ' + interPresent.length + '</h2>' +
+      '<div class="names-grid">' + interRows + '</div></div>' +
+      '<div class="section"><h2>Senior (7, 8, 9, 10, 11, 12) - Count: ' + seniorPresent.length + '</h2>' +
+      '<div class="names-grid">' + seniorRows + '</div></div>' +
+      '<div class="total-count">Total Present Count: ' + totalPresentCount + '</div>' +
       '</div>' +
-      '<div style="text-align: center; margin: 20px 0;"><button onclick="window.print()" style="padding: 12px 24px; font-size: 16px; cursor: pointer; background: #667eea; color: white; border: none; border-radius: 5px; margin-right: 10px;">Print Report</button></div>' +
+      '<div class="actions"><button class="print-btn" onclick="window.print()">Print Report</button></div>' +
       '</body></html>';
     
     // Open report in new tab/window
