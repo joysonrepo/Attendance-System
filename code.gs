@@ -1,8 +1,15 @@
 // Sheet name will be determined by 'group' parameter (Church or RFF)
 // Sheet headers can be in any order; we map by header names.
 
+function renderIndex() {
+  return HtmlService.createHtmlOutputFromFile('index')
+    .setTitle('River Kids Attendance')
+    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+
 function doGet(e) {
   const path = (e && e.parameter && e.parameter.path) ? e.parameter.path : '';
+  if (!path) return renderIndex();
   if (path === 'students') return handleStudents(e);
   if (path === 'stats') return handleStats(e);
   if (path === 'dates') return handleGetDates(e);

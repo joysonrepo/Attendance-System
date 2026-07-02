@@ -356,7 +356,11 @@
   </div>
 
 <script>
-const WEB_APP_BASE = 'https://script.google.com/macros/s/AKfycbyNDzF9jmCLR7rzWvhSj4fd9r-PPLSRglqMFPwFXx2sjvOsP1mORvqf4g59b0uZWDt9/exec';
+const WEB_APP_BASE = (() => {
+  const currentUrl = window.location.href.split('?')[0];
+  if (/script\.google\.com\/macros\/s\//.test(currentUrl)) return currentUrl;
+  return 'https://script.google.com/macros/s/AKfycbzGI0Aos8Qmamg0PcDtV8_sfjoEIi8O2HjCftloWUPderRwQLP5s9VUTvroUaGG6aRw/exec';
+})();
 /* Expected endpoints:
 GET    WEB_APP_BASE + '/students' -> [{id,rowIndex,name,age,phone,gender,place}]
 POST   WEB_APP_BASE + '/attendance' body: {rowIndex,date,status}
