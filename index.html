@@ -271,6 +271,12 @@
           <input id="nameInput" type="text" autocomplete="off" placeholder="Start typing name..." />
           <div id="nameSuggestions" class="hidden"></div>
         </div>
+        <label for="fatherNameInput">Father Name</label>
+        <input id="fatherNameInput" type="text" placeholder="Enter father name" />
+        <label for="motherNameInput">Mother Name</label>
+        <input id="motherNameInput" type="text" placeholder="Enter mother name" />
+        <label for="dobInput">Date of Birth</label>
+        <input id="dobInput" type="date" />
         <label for="classInput">Class</label>
         <select id="classInput">
           <option value="">Select Class</option>
@@ -350,7 +356,7 @@
   </div>
 
 <script>
-const WEB_APP_BASE = 'https://script.google.com/macros/s/AKfycbwJB-dHjP7SSGSvydJJvsCLithjgzYg6eqrJqUSKaOWiIotVnOgdO5_xsbyacJe563P/exec';
+const WEB_APP_BASE = 'https://script.google.com/macros/s/AKfycbyNDzF9jmCLR7rzWvhSj4fd9r-PPLSRglqMFPwFXx2sjvOsP1mORvqf4g59b0uZWDt9/exec';
 /* Expected endpoints:
 GET    WEB_APP_BASE + '/students' -> [{id,rowIndex,name,age,phone,gender,place}]
 POST   WEB_APP_BASE + '/attendance' body: {rowIndex,date,status}
@@ -364,6 +370,9 @@ let selectedStudent = null;
 const els = {
   nameInput: document.getElementById('nameInput'),
   nameSuggestions: document.getElementById('nameSuggestions'),
+  fatherName: document.getElementById('fatherNameInput'),
+  motherName: document.getElementById('motherNameInput'),
+  dob: document.getElementById('dobInput'),
   classInput: document.getElementById('classInput'),
   phone: document.getElementById('phoneInput'),
   gender: document.getElementById('genderInput'),
@@ -438,6 +447,9 @@ function getStudentType() {
 }
 
 function clearStudentFields() {
+  els.fatherName.value = '';
+  els.motherName.value = '';
+  els.dob.value = '';
   els.classInput.value = '';
   els.phone.value = '';
   els.gender.value = '';
@@ -459,8 +471,37 @@ function clearForm() {
   if (presentRadio) presentRadio.checked = true;
 }
 
+function normalizeDateForInput(value) {
+  if (!value) return '';
+  if (value instanceof Date && !isNaN(value)) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  const raw = String(value).trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+  const parts = raw.split(/[\/\-.]/).map(p => p.trim());
+  if (parts.length === 3 && parts[2].length === 4) {
+    const day = parts[0].padStart(2, '0');
+    const month = parts[1].padStart(2, '0');
+    const year = parts[2];
+    const iso = year + '-' + month + '-' + day;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+  }
+
+  const parsed = new Date(raw);
+  if (!isNaN(parsed)) {
+    return parsed.toISOString().slice(0, 10);
+  }
+  return '';
+}
+
 function fillStudentFields(stu) {
   console.log('fillStudentFields called with:', stu);
+  els.fatherName.value = stu.fatherName || '';
+  els.motherName.value = stu.motherName || '';
+  els.dob.value = normalizeDateForInput(stu.dateOfBirth || stu.dob || '');
   els.classInput.value = stu.class || '';
   els.phone.value = stu.phone || '';
   
@@ -619,6 +660,9 @@ async function submitAttendance() {
       date, 
       status: attendanceStatus, 
       group,
+      fatherName: els.fatherName.value.trim(),
+      motherName: els.motherName.value.trim(),
+      dateOfBirth: els.dob.value,
       studentClass: els.classInput.value.trim(),
       phone: els.phone.value.trim(),
       gender: els.gender.value.trim(),
@@ -632,6 +676,9 @@ async function submitAttendance() {
     const modeOfTransport = group === 'Church' ? els.modeOfTransport.value : '';
     payload = {
       name: els.nameInput.value.trim(),
+      fatherName: els.fatherName.value.trim(),
+      motherName: els.motherName.value.trim(),
+      dateOfBirth: els.dob.value,
       studentClass: els.classInput.value.trim(),
       phone: els.phone.value.trim(),
       gender: els.gender.value.trim(),
