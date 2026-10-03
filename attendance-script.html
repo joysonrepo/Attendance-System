@@ -1,0 +1,350 @@
+<script>
+let students = [];
+let selectedStudent = null;
+
+const els = {
+  nameInput: document.getElementById('nameInput'),
+  nameSuggestions: document.getElementById('nameSuggestions'),
+  fatherName: document.getElementById('fatherNameInput'),
+  motherName: document.getElementById('motherNameInput'),
+  dob: document.getElementById('dobInput'),
+  classInput: document.getElementById('classInput'),
+  phone: document.getElementById('phoneInput'),
+  gender: document.getElementById('genderInput'),
+  placeSelect: document.getElementById('placeSelect'),
+  place: document.getElementById('placeInput'),
+  modeOfTransport: document.getElementById('modeOfTransport'),
+  modeTransportLabel: document.getElementById('modeTransportLabel'),
+  submit: document.getElementById('submitBtn'),
+  stats: document.getElementById('stats'),
+  statsSummary: document.getElementById('statsSummary'),
+  statsTableBody: document.querySelector('#statsTable tbody'),
+  refresh: document.getElementById('refreshBtn'),
+  statsBtn: document.getElementById('statsBtn'),
+  clearBtn: document.getElementById('clearBtn'),
+};
+
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getStudentType() {
+  return document.querySelector('input[name=studentType]:checked').value;
+}
+
+async function fetchStudents() {
+  setStatus('Loading students from ' + APP_GROUP + '...');
+  try {
+    const res = await fetch(WEB_APP_BASE + '?path=students&group=' + APP_GROUP);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const payload = await res.json();
+    students = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.list) ? payload.list : []);
+    setStatus('Loaded ' + students.length + ' students.');
+    enableSubmitIfReady();
+  } catch (e) {
+    setStatus('Failed to load students: ' + e.message, true);
+  }
+}
+
+function enableSubmitIfReady() {
+  if (getStudentType() === 'old') {
+    els.submit.disabled = !selectedStudent || (els.modeOfTransport && !els.modeOfTransport.value);
+  } else {
+    const valid = els.nameInput.value.trim() && els.classInput.value.trim() && els.gender.value.trim();
+    const requiresTransport = els.modeOfTransport && !els.modeOfTransport.value;
+    els.submit.disabled = !valid || requiresTransport;
+  }
+}
+
+function clearStudentFields() {
+  els.fatherName.value = '';
+  els.motherName.value = '';
+  els.dob.value = '';
+  els.classInput.value = '';
+  els.phone.value = '';
+  els.gender.value = '';
+  els.placeSelect.value = '';
+  els.place.value = '';
+  els.place.classList.add('hidden');
+  if (els.modeOfTransport) els.modeOfTransport.value = '';
+}
+
+function clearForm() {
+  els.nameInput.value = '';
+  clearStudentFields();
+  hideSuggestions();
+  selectedStudent = null;
+  els.submit.disabled = true;
+  setStatus('');
+  const presentRadio = document.querySelector('input[name=attendance][value="Present"]');
+  if (presentRadio) presentRadio.checked = true;
+}
+
+function normalizeDateForInput(value) {
+  if (!value) return '';
+  if (value instanceof Date && !isNaN(value)) return value.toISOString().slice(0, 10);
+
+  const raw = String(value).trim();
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+
+  const parts = raw.split(/[\/\-.]/).map(part => part.trim());
+  if (parts.length === 3 && parts[2].length === 4) {
+    return parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
+  }
+
+  const parsed = new Date(raw);
+  return isNaN(parsed) ? '' : parsed.toISOString().slice(0, 10);
+}
+
+function fillStudentFields(student) {
+  els.fatherName.value = student.fatherName || '';
+  els.motherName.value = student.motherName || '';
+  els.dob.value = normalizeDateForInput(student.dateOfBirth || student.dob || '');
+  els.classInput.value = student.class || '';
+  els.phone.value = student.phone || '';
+
+  const gender = (student.gender || '').toLowerCase();
+  if (gender === 'male' || gender === 'm') els.gender.value = 'Male';
+  else if (gender === 'female' || gender === 'f') els.gender.value = 'Female';
+  else els.gender.value = student.gender || '';
+
+  const place = (student.place || '').trim();
+  const normalizedPlace = place.toLowerCase().replace(/\s+/g, ' ');
+  if (normalizedPlace.includes('mg') || normalizedPlace.includes('m g')) {
+    els.placeSelect.value = 'MG Palaya';
+    els.place.classList.add('hidden');
+  } else if (normalizedPlace.includes('ss') || normalizedPlace.includes('s s')) {
+    els.placeSelect.value = 'SS Palaya';
+    els.place.classList.add('hidden');
+  } else if (place) {
+    els.placeSelect.value = 'Other';
+    els.place.value = place;
+    els.place.classList.remove('hidden');
+  } else {
+    els.placeSelect.value = '';
+    els.place.classList.add('hidden');
+  }
+
+  if (els.modeOfTransport) els.modeOfTransport.value = student.modeOfTransport || '';
+}
+
+els.nameInput.addEventListener('input', () => {
+  const value = els.nameInput.value.trim().toLowerCase();
+  selectedStudent = null;
+  if (!value || getStudentType() !== 'old') {
+    hideSuggestions();
+    enableSubmitIfReady();
+    return;
+  }
+  const matches = students.filter(student => String(student.name || '').toLowerCase().includes(value)).slice(0, 25);
+  renderSuggestions(matches);
+});
+
+function renderSuggestions(list) {
+  if (!list.length) {
+    hideSuggestions();
+    return;
+  }
+  els.nameSuggestions.innerHTML = list.map(student =>
+    `<div data-id="${student.id}" data-row="${student.rowIndex}">${student.name}</div>`
+  ).join('');
+  els.nameSuggestions.classList.remove('hidden');
+}
+
+function hideSuggestions() {
+  els.nameSuggestions.classList.add('hidden');
+  els.nameSuggestions.innerHTML = '';
+}
+
+els.nameSuggestions.addEventListener('click', event => {
+  const option = event.target.closest('div[data-id]');
+  if (!option) return;
+  selectedStudent = students.find(student => String(student.id) === option.dataset.id);
+  if (!selectedStudent) return;
+  els.nameInput.value = selectedStudent.name;
+  fillStudentFields(selectedStudent);
+  hideSuggestions();
+  enableSubmitIfReady();
+});
+
+Array.from(document.querySelectorAll('input[name=studentType]')).forEach(radio => {
+  radio.addEventListener('change', () => {
+    selectedStudent = null;
+    clearStudentFields();
+    els.submit.disabled = true;
+    enableSubmitIfReady();
+  });
+});
+
+['classInput', 'phoneInput', 'genderInput', 'placeInput', 'placeSelect', 'modeOfTransport'].forEach(id => {
+  const element = document.getElementById(id);
+  if (element) {
+    element.addEventListener('input', enableSubmitIfReady);
+    element.addEventListener('change', enableSubmitIfReady);
+  }
+});
+
+els.placeSelect.addEventListener('change', () => {
+  if (els.placeSelect.value === 'Other') {
+    els.place.classList.remove('hidden');
+    els.place.focus();
+  } else {
+    els.place.classList.add('hidden');
+    els.place.value = '';
+  }
+  enableSubmitIfReady();
+});
+
+els.refresh.addEventListener('click', fetchStudents);
+els.statsBtn.addEventListener('click', loadStats);
+els.clearBtn.addEventListener('click', () => {
+  clearForm();
+  enableSubmitIfReady();
+});
+els.submit.addEventListener('click', submitAttendance);
+
+async function submitAttendance() {
+  const type = getStudentType();
+  const attendanceStatus = document.querySelector('input[name=attendance]:checked').value;
+  const date = todayISO();
+  if (els.submit.disabled) return;
+
+  setStatus('Saving...');
+  els.submit.disabled = true;
+
+  let endpoint;
+  let payload;
+  if (type === 'old') {
+    if (!selectedStudent) {
+      setStatus('Select a student first.', true);
+      els.submit.disabled = false;
+      return;
+    }
+    endpoint = '?path=attendance';
+    const placeValue = els.placeSelect.value === 'Other' ? els.place.value.trim() : els.placeSelect.value;
+    payload = {
+      rowIndex: selectedStudent.rowIndex,
+      date,
+      status: attendanceStatus,
+      group: APP_GROUP,
+      fatherName: els.fatherName.value.trim(),
+      motherName: els.motherName.value.trim(),
+      dateOfBirth: els.dob.value,
+      studentClass: els.classInput.value.trim(),
+      phone: els.phone.value.trim(),
+      gender: els.gender.value.trim(),
+      place: placeValue,
+      modeOfTransport: els.modeOfTransport ? els.modeOfTransport.value : ''
+    };
+  } else {
+    endpoint = '?path=newStudent';
+    payload = {
+      name: els.nameInput.value.trim(),
+      fatherName: els.fatherName.value.trim(),
+      motherName: els.motherName.value.trim(),
+      dateOfBirth: els.dob.value,
+      studentClass: els.classInput.value.trim(),
+      phone: els.phone.value.trim(),
+      gender: els.gender.value.trim(),
+      place: els.placeSelect.value === 'Other' ? els.place.value.trim() : els.placeSelect.value,
+      date,
+      status: attendanceStatus,
+      group: APP_GROUP,
+      modeOfTransport: els.modeOfTransport ? els.modeOfTransport.value : ''
+    };
+  }
+
+  const warningTimer = setTimeout(() => setStatus('Still processing... Google Sheets can take a moment.'), 3000);
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  try {
+    const response = await fetch(WEB_APP_BASE + endpoint, {
+      method: 'POST',
+      headers: {'Content-Type': 'text/plain'},
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const result = await response.json();
+    setStatus(result.message || 'Saved successfully.');
+
+    if (type === 'old') {
+      Object.assign(selectedStudent, {
+        fatherName: payload.fatherName,
+        motherName: payload.motherName,
+        dateOfBirth: payload.dateOfBirth,
+        class: payload.studentClass,
+        phone: payload.phone,
+        gender: payload.gender,
+        place: payload.place,
+        modeOfTransport: payload.modeOfTransport
+      });
+    } else {
+      students.push({
+        id: result.rowIndex,
+        rowIndex: result.rowIndex,
+        name: payload.name,
+        fatherName: payload.fatherName,
+        motherName: payload.motherName,
+        dateOfBirth: payload.dateOfBirth,
+        class: payload.studentClass,
+        phone: payload.phone,
+        gender: payload.gender,
+        place: payload.place,
+        modeOfTransport: payload.modeOfTransport
+      });
+    }
+
+    setTimeout(() => {
+      clearForm();
+      setStatus('');
+    }, 1000);
+  } catch (error) {
+    setStatus(error.name === 'AbortError'
+      ? 'Request timed out. Please check your connection.'
+      : 'Failed: ' + error.message, true);
+  } finally {
+    clearTimeout(timeoutId);
+    clearTimeout(warningTimer);
+    els.submit.disabled = false;
+  }
+}
+
+async function loadStats() {
+  const date = todayISO();
+  setStatus('Loading stats for ' + date + ' (' + APP_GROUP + ')...');
+  try {
+    const response = await fetch(WEB_APP_BASE + '?path=stats&date=' + date + '&group=' + APP_GROUP);
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    renderStats(await response.json());
+    setStatus('Stats loaded.');
+  } catch (error) {
+    setStatus('Failed to load stats: ' + error.message, true);
+  }
+}
+
+function renderStats(stats) {
+  els.stats.classList.remove('hidden');
+  const groups = stats.counts.group;
+  els.statsSummary.innerHTML = `
+    <div class="flex-line">
+      <span class="pill">Date: ${stats.date}</span>
+      <span class="pill">Present: ${stats.counts.present}</span>
+      <span class="pill">Absent: ${stats.counts.absent}</span>
+      <span class="pill">Junior (KG-3) P:${groups.junior.present} A:${groups.junior.absent}</span>
+      <span class="pill">Inter (4-6) P:${groups.inter.present} A:${groups.inter.absent}</span>
+      <span class="pill">Senior (7-12) P:${groups.senior.present} A:${groups.senior.absent}</span>
+    </div>`;
+  els.statsTableBody.innerHTML = stats.list.map(student =>
+    `<tr><td>${student.name}</td><td>${student.class}</td><td>${student.group}</td><td>${student.status}</td></tr>`
+  ).join('');
+}
+
+if (els.modeOfTransport) {
+  els.modeOfTransport.classList.remove('hidden');
+  els.modeTransportLabel.classList.remove('hidden');
+}
+fetchStudents();
+</script>

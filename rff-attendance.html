@@ -1,0 +1,69 @@
+<section id="attendancePage">
+  <h2 class="page-heading">Take Attendance</h2>
+  <fieldset>
+    <legend>Student Type</legend>
+    <div class="type-toggle">
+      <label><input type="radio" name="studentType" value="old" checked /> Existing Student</label>
+      <label><input type="radio" name="studentType" value="new" /> New Student</label>
+    </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Student Information</legend>
+    <div style="position:relative;">
+      <label for="nameInput">Name</label>
+      <input id="nameInput" type="text" autocomplete="off" placeholder="Start typing name..." />
+      <div id="nameSuggestions" class="hidden"></div>
+    </div>
+    <label for="fatherNameInput">Father Name</label>
+    <input id="fatherNameInput" type="text" placeholder="Enter father name" />
+    <label for="motherNameInput">Mother Name</label>
+    <input id="motherNameInput" type="text" placeholder="Enter mother name" />
+    <label for="dobInput">Date of Birth</label>
+    <input id="dobInput" type="date" />
+    <label for="classInput">Class</label>
+    <select id="classInput">
+      <option value="">Select Class</option>
+      <option value="KG">KG</option>
+      <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+      <option value="4">4</option><option value="5">5</option><option value="6">6</option>
+      <option value="7">7</option><option value="8">8</option><option value="9">9</option>
+      <option value="10">10</option><option value="11">11</option><option value="12">12</option>
+    </select>
+    <label for="phoneInput">Phone Number</label>
+    <input id="phoneInput" type="text" placeholder="Enter phone" />
+    <label for="genderInput">Gender</label>
+    <select id="genderInput">
+      <option value="">Select Gender</option>
+      <option value="Male">Male</option><option value="Female">Female</option><option value="Other">Other</option>
+    </select>
+    <label for="placeInput">Place</label>
+    <select id="placeSelect">
+      <option value="">Select Place</option>
+      <option value="MG Palaya">MG Palaya</option><option value="SS Palaya">SS Palaya</option><option value="Other">Other</option>
+    </select>
+    <input id="placeInput" type="text" placeholder="Enter custom place" class="hidden" />
+  </fieldset>
+
+  <fieldset>
+    <legend>Today's Attendance</legend>
+    <div class="type-toggle">
+      <label><input type="radio" name="attendance" value="Present" checked /> Present</label>
+      <label><input type="radio" name="attendance" value="Absent" /> Absent</label>
+    </div>
+  </fieldset>
+
+  <div class="button-group">
+    <button id="submitBtn" disabled>Submit Attendance</button>
+    <button id="refreshBtn" type="button" title="Reload student list">Reload</button>
+    <button id="statsBtn" type="button" title="Show today stats">Stats</button>
+    <button id="clearBtn" type="button" title="Clear form">Clear</button>
+  </div>
+  <div id="stats" class="hidden">
+    <h2>Today's Attendance Summary</h2>
+    <div id="statsSummary"></div>
+    <div class="table-scroll" role="region" aria-label="Attendance stats table" tabindex="0">
+      <table id="statsTable"><thead><tr><th>Name</th><th>Class</th><th>Group</th><th>Status</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+</section>
