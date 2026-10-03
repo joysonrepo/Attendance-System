@@ -29,8 +29,7 @@ jobs:
         run: |
           rm -rf site
           mkdir -p site
-          cp index.html site/
-          cp kids_logo-removebg-preview.png site/
+          cp pages.html site/index.html
           touch site/.nojekyll
 
       - name: Setup Pages
