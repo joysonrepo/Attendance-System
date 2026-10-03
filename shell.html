@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>River Kids Attendance</title>
-  <style><?!= include('styles'); ?></style>
+  <?!= include('styles'); ?>
 </head>
 <body>
   <div class="container">
@@ -38,7 +38,7 @@
     const WEB_APP_BASE = (() => {
       const currentUrl = window.location.href.split('?')[0];
       if (/script\.google\.com\/macros\/s\//.test(currentUrl)) return currentUrl;
-      return 'https://script.google.com/macros/s/AKfycbyyiRFrGDVV3jYKJk1yxP3TGY9F5d2EOozpk-aq6cnKO9qp0H7k9KryJ0GxjV_nVDW5/exec';
+      return 'https://script.google.com/macros/s/AKfycby6BMuKcUlVwVCYirCUYWCWguFbnI9pcXRaT0v1pVMTqk9yR_VzNjAJ_SUMdewIMcEk/exec';
     })();
     const APP_GROUP = '<?= group ?>';
     const APP_PAGE = '<?= page ?>';
