@@ -29,7 +29,7 @@ jobs:
         run: |
           rm -rf site
           mkdir -p site
-          cp index.html site/index.html
+          cp index.html styles.html church-attendance.html rff-attendance.html church-reports.html rff-reports.html attendance-script.html reports-script.html kids_logo-removebg-preview.png site/
           touch site/.nojekyll
 
       - name: Setup Pages

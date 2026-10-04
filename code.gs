@@ -1,25 +1,9 @@
 // Sheet name will be determined by 'group' parameter (Church or RFF)
 // Sheet headers can be in any order; we map by header names.
 
-function renderIndex(e) {
-  const group = e && e.parameter && e.parameter.group === 'RFF' ? 'RFF' : 'Church';
-  const page = e && e.parameter && e.parameter.page === 'report' ? 'report' : 'attendance';
-  const template = HtmlService.createTemplateFromFile('shell');
-  template.group = group;
-  template.page = page;
-  template.module = group.toLowerCase() + '-' + (page === 'report' ? 'reports' : 'attendance');
-  return template.evaluate()
-    .setTitle('River Kids ' + group + (page === 'report' ? ' Reports' : ' Attendance'))
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
-}
-
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
-
 function doGet(e) {
   const path = (e && e.parameter && e.parameter.path) ? e.parameter.path : '';
-  if (!path) return renderIndex(e);
+  if (!path) return jsonOutput({ok: true, service: 'River Kids Attendance API'});
   if (path === 'students') return handleStudents(e);
   if (path === 'stats') return handleStats(e);
   if (path === 'dates') return handleGetDates(e);
