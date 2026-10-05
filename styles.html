@@ -181,6 +181,7 @@ tr:hover { background: #f8f9ff; }
 @media (max-width: 640px) {
   body { padding: 0.5rem; }
   .container { min-height: calc(100vh - 1rem); min-height: calc(100dvh - 1rem); grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto 1fr; border-radius: 12px; }
+  .container.sidebar-collapsed { grid-template-columns: minmax(0,1fr); }
   .sidebar { grid-column: 1; grid-row: 1; padding: 0.9rem; }
   .sidebar-top { margin-bottom: 0.65rem; }
   .sidebar-nav { grid-template-columns: repeat(2,minmax(0,1fr)); }
