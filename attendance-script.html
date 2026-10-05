@@ -123,6 +123,7 @@ async function fetchStudents(query, requestId) {
     const matches = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.list) ? payload.list : []);
     renderSuggestions(matches);
     setStatus(matches.length ? matches.length + ' matching students.' : 'No matching students.');
+    if (!studentIndexLoaded && !studentIndexPromise) refreshStudentIndex();
     enableSubmitIfReady();
   } catch (e) {
     if (requestId !== searchRequestId) return;
@@ -228,20 +229,9 @@ els.nameInput.addEventListener('input', () => {
   }
   els.nameSuggestions.textContent = 'Searching...';
   els.nameSuggestions.classList.remove('hidden');
-  searchTimer = setTimeout(async () => {
-    if (studentIndexLoaded) {
-      renderLocalStudentMatches(value);
-      return;
-    }
-    if (studentIndexPromise) {
-      setStatus('Loading student list...');
-      await studentIndexPromise;
-      if (requestId !== searchRequestId) return;
-      if (studentIndexLoaded) renderLocalStudentMatches(value);
-      else fetchStudents(value, requestId);
-      return;
-    }
-    fetchStudents(value, requestId);
+  searchTimer = setTimeout(() => {
+    if (studentIndexLoaded) renderLocalStudentMatches(value);
+    else fetchStudents(value, requestId);
   }, 250);
 });
 
@@ -489,5 +479,6 @@ if (els.modeOfTransport) {
   els.modeOfTransport.classList.remove('hidden');
   els.modeTransportLabel.classList.remove('hidden');
 }
-if (!restoreStudentIndex()) setTimeout(() => refreshStudentIndex(), 100);
+const hasFreshStudentIndex = restoreStudentIndex();
+if (studentIndexLoaded && !hasFreshStudentIndex) setTimeout(() => refreshStudentIndex(), 100);
 </script>
