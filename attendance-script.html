@@ -104,7 +104,8 @@ function renderLocalStudentMatches(query) {
   const normalizedQuery = query.toLowerCase();
   const matches = students.filter(student => String(student.name || '').toLowerCase().includes(normalizedQuery)).slice(0, 25);
   renderSuggestions(matches);
-  setStatus(matches.length ? matches.length + ' matching students.' : 'No matching students.');
+  setStatus(matches.length ? matches.length + ' matching students.' : 'No local matches. Checking the latest student list...');
+  return matches;
 }
 
 async function fetchStudents(query, requestId) {
@@ -222,7 +223,6 @@ els.nameInput.addEventListener('input', () => {
   clearTimeout(searchTimer);
   const requestId = ++searchRequestId;
   if (value.length < 2 || getStudentType() !== 'old') {
-    students = [];
     hideSuggestions();
     enableSubmitIfReady();
     return;
@@ -230,8 +230,12 @@ els.nameInput.addEventListener('input', () => {
   els.nameSuggestions.textContent = 'Searching...';
   els.nameSuggestions.classList.remove('hidden');
   searchTimer = setTimeout(() => {
-    if (studentIndexLoaded) renderLocalStudentMatches(value);
-    else fetchStudents(value, requestId);
+    if (studentIndexLoaded) {
+      const matches = renderLocalStudentMatches(value);
+      if (!matches.length) fetchStudents(value, requestId);
+    } else {
+      fetchStudents(value, requestId);
+    }
   }, 250);
 });
 
