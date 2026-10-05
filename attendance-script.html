@@ -3,6 +3,10 @@ let students = [];
 let selectedStudent = null;
 let searchTimer = null;
 let searchRequestId = 0;
+let searchResults = [];
+let studentIndexLoaded = false;
+let indexRefreshRequestId = 0;
+let studentIndexPromise = null;
 let submissionQueue = [];
 let processingSubmissions = false;
 let submissionsPaused = false;
@@ -39,6 +43,70 @@ function getStudentType() {
   return document.querySelector('input[name=studentType]:checked').value;
 }
 
+function restoreStudentIndex() {
+  try {
+    const cached = JSON.parse(localStorage.getItem('riverKidsStudents_v1_' + APP_GROUP) || 'null');
+    if (!cached || !Array.isArray(cached.students)) return false;
+    students = cached.students;
+    studentIndexLoaded = true;
+    return Date.now() - cached.savedAt < 60000;
+  } catch (error) {
+    return false;
+  }
+}
+
+function saveStudentIndex() {
+  if (!studentIndexLoaded) return;
+  try {
+    localStorage.setItem('riverKidsStudents_v1_' + APP_GROUP, JSON.stringify({
+      savedAt: Date.now(),
+      students
+    }));
+  } catch (error) {
+    // Keep the in-memory roster if browser storage is unavailable.
+  }
+}
+
+async function refreshStudentIndex(showStatus = false) {
+  const requestId = ++indexRefreshRequestId;
+  if (showStatus) setStatus('Refreshing student list...');
+  const refreshPromise = (async () => {
+    try {
+      const response = await fetch(WEB_APP_BASE + '?path=students&group=' + APP_GROUP);
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const payload = await response.json();
+      if (requestId !== indexRefreshRequestId) return false;
+      students = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.list) ? payload.list : []);
+      studentIndexLoaded = true;
+      saveStudentIndex();
+
+      const query = els.nameInput.value.trim().toLowerCase();
+      if (query.length >= 2 && getStudentType() === 'old' && !selectedStudent) {
+        searchRequestId++;
+        renderLocalStudentMatches(query);
+      } else if (showStatus) {
+        setStatus('Student list refreshed.');
+      }
+      return true;
+    } catch (error) {
+      if (showStatus) setStatus('Failed to refresh students: ' + error.message, true);
+      return false;
+    }
+  })();
+
+  studentIndexPromise = refreshPromise;
+  const refreshed = await refreshPromise;
+  if (studentIndexPromise === refreshPromise) studentIndexPromise = null;
+  return refreshed;
+}
+
+function renderLocalStudentMatches(query) {
+  const normalizedQuery = query.toLowerCase();
+  const matches = students.filter(student => String(student.name || '').toLowerCase().includes(normalizedQuery)).slice(0, 25);
+  renderSuggestions(matches);
+  setStatus(matches.length ? matches.length + ' matching students.' : 'No matching students.');
+}
+
 async function fetchStudents(query, requestId) {
   const normalizedQuery = String(query || '').trim();
   if (normalizedQuery.length < 2) {
@@ -52,9 +120,9 @@ async function fetchStudents(query, requestId) {
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const payload = await res.json();
     if (requestId !== searchRequestId) return;
-    students = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.list) ? payload.list : []);
-    renderSuggestions(students);
-    setStatus(students.length ? students.length + ' matching students.' : 'No matching students.');
+    const matches = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.list) ? payload.list : []);
+    renderSuggestions(matches);
+    setStatus(matches.length ? matches.length + ' matching students.' : 'No matching students.');
     enableSubmitIfReady();
   } catch (e) {
     if (requestId !== searchRequestId) return;
@@ -86,6 +154,8 @@ function clearStudentFields() {
 }
 
 function clearForm() {
+  clearTimeout(searchTimer);
+  searchRequestId++;
   els.nameInput.value = '';
   clearStudentFields();
   hideSuggestions();
@@ -158,10 +228,25 @@ els.nameInput.addEventListener('input', () => {
   }
   els.nameSuggestions.textContent = 'Searching...';
   els.nameSuggestions.classList.remove('hidden');
-  searchTimer = setTimeout(() => fetchStudents(value, requestId), 250);
+  searchTimer = setTimeout(async () => {
+    if (studentIndexLoaded) {
+      renderLocalStudentMatches(value);
+      return;
+    }
+    if (studentIndexPromise) {
+      setStatus('Loading student list...');
+      await studentIndexPromise;
+      if (requestId !== searchRequestId) return;
+      if (studentIndexLoaded) renderLocalStudentMatches(value);
+      else fetchStudents(value, requestId);
+      return;
+    }
+    fetchStudents(value, requestId);
+  }, 250);
 });
 
 function renderSuggestions(list) {
+  searchResults = list;
   if (!list.length) {
     hideSuggestions();
     return;
@@ -173,6 +258,7 @@ function renderSuggestions(list) {
 }
 
 function hideSuggestions() {
+  searchResults = [];
   els.nameSuggestions.classList.add('hidden');
   els.nameSuggestions.innerHTML = '';
 }
@@ -180,7 +266,7 @@ function hideSuggestions() {
 els.nameSuggestions.addEventListener('click', event => {
   const option = event.target.closest('div[data-id]');
   if (!option) return;
-  selectedStudent = students.find(student => String(student.id) === option.dataset.id);
+  selectedStudent = searchResults.find(student => String(student.id) === option.dataset.id);
   if (!selectedStudent) return;
   els.nameInput.value = selectedStudent.name;
   fillStudentFields(selectedStudent);
@@ -216,10 +302,7 @@ els.placeSelect.addEventListener('change', () => {
   enableSubmitIfReady();
 });
 
-els.refresh.addEventListener('click', () => {
-  clearTimeout(searchTimer);
-  fetchStudents(els.nameInput.value, ++searchRequestId);
-});
+els.refresh.addEventListener('click', () => refreshStudentIndex(true));
 els.statsBtn.addEventListener('click', loadStats);
 els.clearBtn.addEventListener('click', () => {
   clearForm();
@@ -331,6 +414,7 @@ async function processSubmissionQueue() {
           place: item.payload.place,
           modeOfTransport: item.payload.modeOfTransport
         });
+        saveStudentIndex();
       } else {
         students.push({
           id: result.rowIndex,
@@ -345,6 +429,7 @@ async function processSubmissionQueue() {
           place: item.payload.place,
           modeOfTransport: item.payload.modeOfTransport
         });
+        saveStudentIndex();
       }
 
       submissionQueue.shift();
@@ -404,4 +489,5 @@ if (els.modeOfTransport) {
   els.modeOfTransport.classList.remove('hidden');
   els.modeTransportLabel.classList.remove('hidden');
 }
+if (!restoreStudentIndex()) setTimeout(() => refreshStudentIndex(), 100);
 </script>
