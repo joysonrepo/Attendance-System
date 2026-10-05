@@ -30,20 +30,18 @@ function headerRow(sheet) {
   return sheet.getRange(1,1,1,sheet.getLastColumn()).getValues()[0];
 }
 
-function headerIndexMap(sheet) {
-  const headers = headerRow(sheet).map(h => String(h).trim());
+function headerIndexMap(sheet, sourceHeaders) {
+  const headers = (sourceHeaders || headerRow(sheet)).map(h => String(h).trim());
   const idx = {};
   headers.forEach((h,i) => {
     const lowerH = h.toLowerCase();
     idx[lowerH] = i+1; // 1-based
   });
-  Logger.log('Headers found: ' + JSON.stringify(headers));
-  Logger.log('Header index map: ' + JSON.stringify(idx));
   return { headers, idx };
 }
 
-function ensureDateColumn(sheet, dateISO) {
-  const headers = headerRow(sheet);
+function ensureDateColumn(sheet, dateISO, sourceHeaders) {
+  const headers = sourceHeaders || headerRow(sheet);
   let colIndex = headers.indexOf(dateISO) + 1; // 1-based if found
   if (colIndex === 0) { // not found
     colIndex = headers.length + 1;
@@ -73,12 +71,14 @@ function ensureStudentHeaderLayout(sheet) {
   });
 }
 
-function getStudentColumnMap(sheet) {
-  let { idx } = headerIndexMap(sheet);
+function getStudentColumnMap(sheet, headers) {
+  let sourceHeaders = headers || headerRow(sheet);
+  let { idx } = headerIndexMap(sheet, sourceHeaders);
   const requiredHeaders = ['father name', 'mother name', 'date of birth'];
   if (requiredHeaders.some(name => !idx[name])) {
     ensureStudentHeaderLayout(sheet);
-    ({ idx } = headerIndexMap(sheet));
+    sourceHeaders = headerRow(sheet);
+    ({ idx } = headerIndexMap(sheet, sourceHeaders));
   }
   return {
     slnoCol: idx['sl. no'] || 1,
@@ -90,64 +90,94 @@ function getStudentColumnMap(sheet) {
     phoneCol: idx['phone'] || 7,
     genderCol: idx['gender'] || 8,
     placeCol: idx['place'] || 9,
-    modeCol: idx['transport'] || 10
+    modeCol: idx['transport'] || 10,
+    headers: sourceHeaders
   };
 }
 
 function handleStudents(e) {
-  const group = (e && e.parameter && e.parameter.group) ? e.parameter.group : 'Church';
-  const sheet = getSheet(group);
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return jsonOutput([]); // No data rows
+  const group = e && e.parameter && e.parameter.group === 'RFF' ? 'RFF' : 'Church';
+  const query = String((e && e.parameter && e.parameter.q) || '').trim().toLowerCase();
+  const cache = CacheService.getScriptCache();
+  const cacheKey = 'students_v1_' + group;
+  const cached = cache.get(cacheKey);
+  let list;
 
-  const cols = getStudentColumnMap(sheet);
-  const numCols = Math.max(cols.slnoCol, cols.nameCol, cols.fatherNameCol || 0,
-    cols.motherNameCol || 0, cols.dobCol || 0, cols.classCol, cols.phoneCol,
-    cols.genderCol, cols.placeCol, group === 'Church' ? cols.modeCol : 0);
-  const values = sheet.getRange(2,1,lastRow-1, numCols).getValues();
-  const list = values.map((row,i) => {
-    const modeValue = String(row[cols.modeCol-1] || '').trim();
-    return {
-      id: i+1,
-      rowIndex: i+2, // actual sheet row
-      name: String(row[cols.nameCol-1] || '').trim(),
-      fatherName: String(row[cols.fatherNameCol-1] || '').trim(),
-      motherName: String(row[cols.motherNameCol-1] || '').trim(),
-      dateOfBirth: String(row[cols.dobCol-1] || '').trim(),
-      class: String(row[cols.classCol-1] || '').trim(),
-      phone: String(row[cols.phoneCol-1] || '').trim(),
-      gender: String(row[cols.genderCol-1] || '').trim(),
-      place: String(row[cols.placeCol-1] || '').trim(),
-      modeOfTransport: group === 'Church' ? modeValue : ''
-    };
-  }).filter(r => r.name);
+  if (cached !== null) {
+    list = JSON.parse(cached);
+  } else {
+    const sheet = getSheet(group);
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) {
+      list = [];
+    } else {
+      const cols = getStudentColumnMap(sheet);
+      const numCols = Math.max(cols.slnoCol, cols.nameCol, cols.fatherNameCol || 0,
+        cols.motherNameCol || 0, cols.dobCol || 0, cols.classCol, cols.phoneCol,
+        cols.genderCol, cols.placeCol, group === 'Church' ? cols.modeCol : 0);
+      const values = sheet.getRange(2, 1, lastRow - 1, numCols).getValues();
+      list = values.map((row, i) => {
+        const modeValue = String(row[cols.modeCol - 1] || '').trim();
+        return {
+          id: i + 1,
+          rowIndex: i + 2,
+          name: String(row[cols.nameCol - 1] || '').trim(),
+          fatherName: String(row[cols.fatherNameCol - 1] || '').trim(),
+          motherName: String(row[cols.motherNameCol - 1] || '').trim(),
+          dateOfBirth: String(row[cols.dobCol - 1] || '').trim(),
+          class: String(row[cols.classCol - 1] || '').trim(),
+          phone: String(row[cols.phoneCol - 1] || '').trim(),
+          gender: String(row[cols.genderCol - 1] || '').trim(),
+          place: String(row[cols.placeCol - 1] || '').trim(),
+          modeOfTransport: group === 'Church' ? modeValue : ''
+        };
+      }).filter(student => student.name);
+
+      const serialized = JSON.stringify(list);
+      if (Utilities.newBlob(serialized).getBytes().length <= 90000) {
+        cache.put(cacheKey, serialized, 60);
+      }
+    }
+  }
+
+  if (query) {
+    list = list.filter(student => student.name.toLowerCase().includes(query)).slice(0, 25);
+  }
   return jsonOutput(list);
+}
+
+function invalidateStudentCache(group) {
+  CacheService.getScriptCache().remove('students_v1_' + group);
 }
 
 function handleAttendance(body) {
   const {rowIndex, date, status, group, fatherName, motherName, dateOfBirth, studentClass, phone, gender, place, modeOfTransport} = body;
   if (!rowIndex || !date || !status) return jsonOutput({error:'Missing fields'}, 400);
 
-  const sheet = getSheet(group || 'Church');
-  const cols = getStudentColumnMap(sheet);
+  const sheetGroup = group || 'Church';
+  const sheet = getSheet(sheetGroup);
+  const cols = getStudentColumnMap(sheet, headerRow(sheet));
+  const headers = cols.headers;
   const metadataWidth = Math.max(cols.nameCol, cols.fatherNameCol || 0,
     cols.motherNameCol || 0, cols.dobCol || 0, cols.classCol, cols.phoneCol,
-    cols.genderCol, cols.placeCol, group === 'Church' ? cols.modeCol : 0);
-  const metadataRange = sheet.getRange(rowIndex, 1, 1, metadataWidth);
-  const metadata = metadataRange.getValues()[0];
+    cols.genderCol, cols.placeCol, sheetGroup === 'Church' ? cols.modeCol : 0);
+  const colIndex = ensureDateColumn(sheet, date, headers);
+  const rowWidth = Math.max(metadataWidth, colIndex);
+  const rowRange = sheet.getRange(rowIndex, 1, 1, rowWidth);
+  const row = rowRange.getValues()[0];
 
-  if (fatherName !== undefined && cols.fatherNameCol) metadata[cols.fatherNameCol - 1] = fatherName || '';
-  if (motherName !== undefined && cols.motherNameCol) metadata[cols.motherNameCol - 1] = motherName || '';
-  if (dateOfBirth !== undefined && cols.dobCol) metadata[cols.dobCol - 1] = dateOfBirth || '';
-  if (studentClass !== undefined) metadata[cols.classCol - 1] = studentClass || '';
-  if (phone !== undefined) metadata[cols.phoneCol - 1] = phone || '';
-  if (gender !== undefined) metadata[cols.genderCol - 1] = gender || '';
-  if (place !== undefined) metadata[cols.placeCol - 1] = place || '';
-  if (modeOfTransport !== undefined && group === 'Church') metadata[cols.modeCol - 1] = modeOfTransport || '';
-  metadataRange.setValues([metadata]);
+  if (fatherName !== undefined && cols.fatherNameCol) row[cols.fatherNameCol - 1] = fatherName || '';
+  if (motherName !== undefined && cols.motherNameCol) row[cols.motherNameCol - 1] = motherName || '';
+  if (dateOfBirth !== undefined && cols.dobCol) row[cols.dobCol - 1] = dateOfBirth || '';
+  if (studentClass !== undefined) row[cols.classCol - 1] = studentClass || '';
+  if (phone !== undefined) row[cols.phoneCol - 1] = phone || '';
+  if (gender !== undefined) row[cols.genderCol - 1] = gender || '';
+  if (place !== undefined) row[cols.placeCol - 1] = place || '';
+  if (modeOfTransport !== undefined && sheetGroup === 'Church') row[cols.modeCol - 1] = modeOfTransport || '';
+  row[colIndex - 1] = status;
+  rowRange.setValues([row]);
 
-  const colIndex = ensureDateColumn(sheet, date);
-  sheet.getRange(rowIndex, colIndex).setValue(status);
+  invalidateStudentCache(sheetGroup);
   return jsonOutput({message: 'Attendance recorded and student details updated'});
 }
 
@@ -155,8 +185,10 @@ function handleNewStudent(body) {
   const {name, fatherName, motherName, dateOfBirth, studentClass, phone, gender, place, date, status, group, modeOfTransport} = body;
   if (!name || !studentClass || !gender || !date || !status) return jsonOutput({error:'Missing required fields'}, 400);
 
-  const sheet = getSheet(group || 'Church');
-  const cols = getStudentColumnMap(sheet);
+  const sheetGroup = group || 'Church';
+  const sheet = getSheet(sheetGroup);
+  const cols = getStudentColumnMap(sheet, headerRow(sheet));
+  const headers = cols.headers;
   const lastRow = sheet.getLastRow() + 1;
 
   // Calculate next Sl. No (fallback to column A if header missing)
@@ -168,22 +200,23 @@ function handleNewStudent(body) {
 
   const metadataWidth = Math.max(cols.slnoCol, cols.nameCol, cols.fatherNameCol || 0,
     cols.motherNameCol || 0, cols.dobCol || 0, cols.classCol, cols.phoneCol,
-    cols.genderCol, cols.placeCol, group === 'Church' ? cols.modeCol : 0);
-  const metadata = new Array(metadataWidth).fill('');
-  metadata[cols.slnoCol - 1] = nextSlNo;
-  metadata[cols.nameCol - 1] = name;
-  if (cols.fatherNameCol) metadata[cols.fatherNameCol - 1] = fatherName || '';
-  if (cols.motherNameCol) metadata[cols.motherNameCol - 1] = motherName || '';
-  if (cols.dobCol) metadata[cols.dobCol - 1] = dateOfBirth || '';
-  metadata[cols.classCol - 1] = studentClass;
-  metadata[cols.phoneCol - 1] = phone || '';
-  metadata[cols.genderCol - 1] = gender;
-  metadata[cols.placeCol - 1] = place || '';
-  if (group === 'Church' && cols.modeCol) metadata[cols.modeCol - 1] = modeOfTransport || '';
-  sheet.getRange(lastRow, 1, 1, metadataWidth).setValues([metadata]);
-
-  const colIndex = ensureDateColumn(sheet, date);
-  sheet.getRange(lastRow, colIndex).setValue(status);
+    cols.genderCol, cols.placeCol, sheetGroup === 'Church' ? cols.modeCol : 0);
+  const colIndex = ensureDateColumn(sheet, date, headers);
+  const rowWidth = Math.max(metadataWidth, colIndex);
+  const row = new Array(rowWidth).fill('');
+  row[cols.slnoCol - 1] = nextSlNo;
+  row[cols.nameCol - 1] = name;
+  if (cols.fatherNameCol) row[cols.fatherNameCol - 1] = fatherName || '';
+  if (cols.motherNameCol) row[cols.motherNameCol - 1] = motherName || '';
+  if (cols.dobCol) row[cols.dobCol - 1] = dateOfBirth || '';
+  row[cols.classCol - 1] = studentClass;
+  row[cols.phoneCol - 1] = phone || '';
+  row[cols.genderCol - 1] = gender;
+  row[cols.placeCol - 1] = place || '';
+  if (sheetGroup === 'Church' && cols.modeCol) row[cols.modeCol - 1] = modeOfTransport || '';
+  row[colIndex - 1] = status;
+  sheet.getRange(lastRow, 1, 1, rowWidth).setValues([row]);
+  invalidateStudentCache(sheetGroup);
   return jsonOutput({message:'New student added & attendance recorded', rowIndex: lastRow});
 }
 

@@ -1,6 +1,11 @@
 <script>
 let students = [];
 let selectedStudent = null;
+let searchTimer = null;
+let searchRequestId = 0;
+let submissionQueue = [];
+let processingSubmissions = false;
+let submissionsPaused = false;
 
 const els = {
   nameInput: document.getElementById('nameInput'),
@@ -22,6 +27,8 @@ const els = {
   refresh: document.getElementById('refreshBtn'),
   statsBtn: document.getElementById('statsBtn'),
   clearBtn: document.getElementById('clearBtn'),
+  saveQueueStatus: document.getElementById('saveQueueStatus'),
+  retrySaves: document.getElementById('retrySavesBtn'),
 };
 
 function todayISO() {
@@ -32,16 +39,25 @@ function getStudentType() {
   return document.querySelector('input[name=studentType]:checked').value;
 }
 
-async function fetchStudents() {
-  setStatus('Loading students from ' + APP_GROUP + '...');
+async function fetchStudents(query, requestId) {
+  const normalizedQuery = String(query || '').trim();
+  if (normalizedQuery.length < 2) {
+    setStatus('Enter at least two letters to search.');
+    return;
+  }
+
+  setStatus('Searching students...');
   try {
-    const res = await fetch(WEB_APP_BASE + '?path=students&group=' + APP_GROUP);
+    const res = await fetch(WEB_APP_BASE + '?path=students&group=' + APP_GROUP + '&q=' + encodeURIComponent(normalizedQuery));
     if (!res.ok) throw new Error('HTTP ' + res.status);
     const payload = await res.json();
+    if (requestId !== searchRequestId) return;
     students = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.list) ? payload.list : []);
-    setStatus('Loaded ' + students.length + ' students.');
+    renderSuggestions(students);
+    setStatus(students.length ? students.length + ' matching students.' : 'No matching students.');
     enableSubmitIfReady();
   } catch (e) {
+    if (requestId !== searchRequestId) return;
     setStatus('Failed to load students: ' + e.message, true);
   }
 }
@@ -130,15 +146,19 @@ function fillStudentFields(student) {
 }
 
 els.nameInput.addEventListener('input', () => {
-  const value = els.nameInput.value.trim().toLowerCase();
+  const value = els.nameInput.value.trim();
   selectedStudent = null;
-  if (!value || getStudentType() !== 'old') {
+  clearTimeout(searchTimer);
+  const requestId = ++searchRequestId;
+  if (value.length < 2 || getStudentType() !== 'old') {
+    students = [];
     hideSuggestions();
     enableSubmitIfReady();
     return;
   }
-  const matches = students.filter(student => String(student.name || '').toLowerCase().includes(value)).slice(0, 25);
-  renderSuggestions(matches);
+  els.nameSuggestions.textContent = 'Searching...';
+  els.nameSuggestions.classList.remove('hidden');
+  searchTimer = setTimeout(() => fetchStudents(value, requestId), 250);
 });
 
 function renderSuggestions(list) {
@@ -196,13 +216,26 @@ els.placeSelect.addEventListener('change', () => {
   enableSubmitIfReady();
 });
 
-els.refresh.addEventListener('click', fetchStudents);
+els.refresh.addEventListener('click', () => {
+  clearTimeout(searchTimer);
+  fetchStudents(els.nameInput.value, ++searchRequestId);
+});
 els.statsBtn.addEventListener('click', loadStats);
 els.clearBtn.addEventListener('click', () => {
   clearForm();
   enableSubmitIfReady();
 });
 els.submit.addEventListener('click', submitAttendance);
+els.retrySaves.addEventListener('click', () => {
+  submissionsPaused = false;
+  els.retrySaves.classList.add('hidden');
+  processSubmissionQueue();
+});
+
+function setQueueStatus(message, isError = false) {
+  els.saveQueueStatus.textContent = message;
+  els.saveQueueStatus.style.color = isError ? '#b42318' : '#365c78';
+}
 
 async function submitAttendance() {
   const type = getStudentType();
@@ -210,21 +243,18 @@ async function submitAttendance() {
   const date = todayISO();
   if (els.submit.disabled) return;
 
-  setStatus('Saving...');
-  els.submit.disabled = true;
-
+  const student = type === 'old' ? selectedStudent : null;
   let endpoint;
   let payload;
   if (type === 'old') {
-    if (!selectedStudent) {
+    if (!student) {
       setStatus('Select a student first.', true);
-      els.submit.disabled = false;
       return;
     }
     endpoint = '?path=attendance';
     const placeValue = els.placeSelect.value === 'Other' ? els.place.value.trim() : els.placeSelect.value;
     payload = {
-      rowIndex: selectedStudent.rowIndex,
+      rowIndex: student.rowIndex,
       date,
       status: attendanceStatus,
       group: APP_GROUP,
@@ -255,60 +285,88 @@ async function submitAttendance() {
     };
   }
 
-  const warningTimer = setTimeout(() => setStatus('Still processing... Google Sheets can take a moment.'), 3000);
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  submissionQueue.push({
+    endpoint,
+    type,
+    payload,
+    student,
+    name: payload.name || student.name
+  });
+  clearForm();
+  enableSubmitIfReady();
+  setQueueStatus('Attendance queued. Ready for the next entry (' + submissionQueue.length + ' pending).' +
+    (submissionsPaused ? ' Retry the previous save to continue.' : ''));
+  processSubmissionQueue();
+}
 
-  try {
-    const response = await fetch(WEB_APP_BASE + endpoint, {
-      method: 'POST',
-      headers: {'Content-Type': 'text/plain'},
-      body: JSON.stringify(payload),
-      signal: controller.signal
-    });
-    if (!response.ok) throw new Error('HTTP ' + response.status);
-    const result = await response.json();
-    setStatus(result.message || 'Saved successfully.');
+async function processSubmissionQueue() {
+  if (processingSubmissions || submissionsPaused || !submissionQueue.length) return;
+  processingSubmissions = true;
+  els.retrySaves.disabled = true;
 
-    if (type === 'old') {
-      Object.assign(selectedStudent, {
-        fatherName: payload.fatherName,
-        motherName: payload.motherName,
-        dateOfBirth: payload.dateOfBirth,
-        class: payload.studentClass,
-        phone: payload.phone,
-        gender: payload.gender,
-        place: payload.place,
-        modeOfTransport: payload.modeOfTransport
+  while (submissionQueue.length) {
+    const item = submissionQueue[0];
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+    try {
+      const response = await fetch(WEB_APP_BASE + item.endpoint, {
+        method: 'POST',
+        headers: {'Content-Type': 'text/plain'},
+        body: JSON.stringify(item.payload),
+        signal: controller.signal
       });
-    } else {
-      students.push({
-        id: result.rowIndex,
-        rowIndex: result.rowIndex,
-        name: payload.name,
-        fatherName: payload.fatherName,
-        motherName: payload.motherName,
-        dateOfBirth: payload.dateOfBirth,
-        class: payload.studentClass,
-        phone: payload.phone,
-        gender: payload.gender,
-        place: payload.place,
-        modeOfTransport: payload.modeOfTransport
-      });
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      const result = await response.json();
+      if (result.error) throw new Error(result.error);
+
+      if (item.type === 'old') {
+        Object.assign(item.student, {
+          fatherName: item.payload.fatherName,
+          motherName: item.payload.motherName,
+          dateOfBirth: item.payload.dateOfBirth,
+          class: item.payload.studentClass,
+          phone: item.payload.phone,
+          gender: item.payload.gender,
+          place: item.payload.place,
+          modeOfTransport: item.payload.modeOfTransport
+        });
+      } else {
+        students.push({
+          id: result.rowIndex,
+          rowIndex: result.rowIndex,
+          name: item.payload.name,
+          fatherName: item.payload.fatherName,
+          motherName: item.payload.motherName,
+          dateOfBirth: item.payload.dateOfBirth,
+          class: item.payload.studentClass,
+          phone: item.payload.phone,
+          gender: item.payload.gender,
+          place: item.payload.place,
+          modeOfTransport: item.payload.modeOfTransport
+        });
+      }
+
+      submissionQueue.shift();
+      setQueueStatus(submissionQueue.length
+        ? item.name + ' saved. ' + submissionQueue.length + ' more pending.'
+        : item.name + ' saved. Ready for the next entry.');
+    } catch (error) {
+      const message = error.name === 'AbortError' ? 'Request timed out.' : error.message;
+      setQueueStatus(item.name + ' was not confirmed saved. It is still queued. ' + message, true);
+      submissionsPaused = true;
+      els.retrySaves.classList.remove('hidden');
+      break;
+    } finally {
+      clearTimeout(timeoutId);
     }
+  }
 
-    setTimeout(() => {
-      clearForm();
-      setStatus('');
-    }, 1000);
-  } catch (error) {
-    setStatus(error.name === 'AbortError'
-      ? 'Request timed out. Please check your connection.'
-      : 'Failed: ' + error.message, true);
-  } finally {
-    clearTimeout(timeoutId);
-    clearTimeout(warningTimer);
-    els.submit.disabled = false;
+  processingSubmissions = false;
+  els.retrySaves.disabled = false;
+  if (!submissionQueue.length) {
+    submissionsPaused = false;
+    els.retrySaves.classList.add('hidden');
   }
 }
 
@@ -346,5 +404,4 @@ if (els.modeOfTransport) {
   els.modeOfTransport.classList.remove('hidden');
   els.modeTransportLabel.classList.remove('hidden');
 }
-fetchStudents();
 </script>
