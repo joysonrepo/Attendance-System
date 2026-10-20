@@ -51,11 +51,75 @@ async function loadBestAttenders() {
   try {
     const response = await fetch(WEB_APP_BASE + '?path=bestAttenders&group=' + encodeURIComponent(APP_GROUP));
     if (!response.ok) throw new Error('HTTP ' + response.status);
-    renderBestAttenders(await response.json());
+    const result = await response.json();
+    if (result && result.error === 'Unknown GET endpoint' && result.path === 'bestAttenders') {
+      renderBestAttenders(await loadBestAttendersFromReports());
+    } else {
+      renderBestAttenders(result);
+    }
     setStatus('');
   } catch (error) {
     setStatus('Failed to load best attenders: ' + error.message, true);
   }
+}
+
+async function loadBestAttendersFromReports() {
+  const datesResponse = await fetch(WEB_APP_BASE + '?path=dates&group=' + encodeURIComponent(APP_GROUP));
+  if (!datesResponse.ok) throw new Error('Could not load attendance dates (HTTP ' + datesResponse.status + ').');
+  const datesResult = await datesResponse.json();
+  if (!datesResult || !Array.isArray(datesResult.dates)) {
+    throw new Error('The attendance dates response was invalid.');
+  }
+
+  const attendanceByStudent = new Map();
+  const batchSize = 6;
+  for (let start = 0; start < datesResult.dates.length; start += batchSize) {
+    const batch = datesResult.dates.slice(start, start + batchSize);
+    setStatus('Loading attendance history (' + Math.min(start + batch.length, datesResult.dates.length) +
+      ' of ' + datesResult.dates.length + ' dates)...');
+    const reports = await Promise.all(batch.map(async date => {
+      const url = WEB_APP_BASE + '?path=report&date=' + encodeURIComponent(date) +
+        '&group=' + encodeURIComponent(APP_GROUP);
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Could not load attendance for ' + date + ' (HTTP ' + response.status + ').');
+      const report = await response.json();
+      if (!report || typeof report !== 'object') {
+        throw new Error('The attendance report for ' + date + ' was invalid.');
+      }
+      if (report.error) throw new Error('Could not load attendance for ' + date + ': ' + report.error);
+      if (!Array.isArray(report.junior) || !Array.isArray(report.inter) || !Array.isArray(report.senior)) {
+        throw new Error('The attendance report for ' + date + ' was invalid.');
+      }
+      return report;
+    }));
+
+    reports.forEach(report => {
+      const presentOnDate = new Set();
+      ['junior', 'inter', 'senior'].forEach(category => {
+        report[category].forEach(student => {
+          if (student.status !== 'Present' || !String(student.name || '').trim()) return;
+          const name = String(student.name).trim();
+          const studentClass = String(student.class || '').trim();
+          const key = name.toLocaleLowerCase() + '|' + studentClass.toLocaleLowerCase();
+          if (presentOnDate.has(key)) return;
+          presentOnDate.add(key);
+
+          const current = attendanceByStudent.get(key) || {
+            name,
+            class: studentClass,
+            daysAttended: 0
+          };
+          current.daysAttended++;
+          attendanceByStudent.set(key, current);
+        });
+      });
+    });
+  }
+
+  const list = Array.from(attendanceByStudent.values())
+    .sort((a, b) => b.daysAttended - a.daysAttended || a.name.localeCompare(b.name))
+    .slice(0, 5);
+  return {group: APP_GROUP, totalDays: datesResult.dates.length, list};
 }
 
 loadBestAttenders();

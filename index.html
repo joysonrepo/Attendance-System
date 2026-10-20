@@ -104,10 +104,11 @@
         : APP_PAGE === 'best-attender'
           ? 'best-attenders-script'
         : APP_PAGE === 'report' ? 'reports-script' : 'attendance-script';
+      const assetVersion = Date.now();
       const [styleResponse, viewResponse, scriptResponse] = await Promise.all([
-        fetch('./styles.html'),
-        fetch('./' + viewName + '.html'),
-        fetch('./' + scriptName + '.html')
+        fetch('./styles.html?v=' + assetVersion),
+        fetch('./' + viewName + '.html?v=' + assetVersion),
+        fetch('./' + scriptName + '.html?v=' + assetVersion)
       ]);
       if (!styleResponse.ok || !viewResponse.ok || !scriptResponse.ok) {
         throw new Error('A page module failed to load.');
