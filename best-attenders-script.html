@@ -1,0 +1,62 @@
+<script>
+const bestAttendersSummary = document.getElementById('bestAttendersSummary');
+const bestAttendersList = document.getElementById('bestAttendersList');
+
+function renderBestAttenders(result) {
+  if (!result || !Array.isArray(result.list)) {
+    throw new Error('The best attenders response was invalid.');
+  }
+
+  bestAttendersSummary.textContent = result.totalDays
+    ? 'Ranked across ' + result.totalDays + ' recorded attendance days.'
+    : 'No attendance days have been recorded yet.';
+  bestAttendersList.replaceChildren();
+
+  if (!result.list.length) {
+    const emptyMessage = document.createElement('li');
+    emptyMessage.className = 'empty-message';
+    emptyMessage.textContent = 'No attendance records are available yet.';
+    bestAttendersList.appendChild(emptyMessage);
+    return;
+  }
+
+  result.list.forEach((student, index) => {
+    const item = document.createElement('li');
+    item.className = 'best-attender-item';
+
+    const rank = document.createElement('span');
+    rank.className = 'best-attender-rank';
+    rank.textContent = String(index + 1);
+
+    const details = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'best-attender-name';
+    name.textContent = student.name || 'Unnamed student';
+    const studentClass = document.createElement('div');
+    studentClass.className = 'best-attender-class';
+    studentClass.textContent = student.class ? 'Class ' + student.class : 'Class not listed';
+    details.append(name, studentClass);
+
+    const days = document.createElement('span');
+    days.className = 'best-attender-days';
+    days.textContent = student.daysAttended + (student.daysAttended === 1 ? ' day attended' : ' days attended');
+
+    item.append(rank, details, days);
+    bestAttendersList.appendChild(item);
+  });
+}
+
+async function loadBestAttenders() {
+  setStatus('Loading best attenders...');
+  try {
+    const response = await fetch(WEB_APP_BASE + '?path=bestAttenders&group=' + encodeURIComponent(APP_GROUP));
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    renderBestAttenders(await response.json());
+    setStatus('');
+  } catch (error) {
+    setStatus('Failed to load best attenders: ' + error.message, true);
+  }
+}
+
+loadBestAttenders();
+</script>

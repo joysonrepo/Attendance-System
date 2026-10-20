@@ -8,6 +8,7 @@ function doGet(e) {
   if (path === 'stats') return handleStats(e);
   if (path === 'dates') return handleGetDates(e);
   if (path === 'report') return handleGenerateReport(e);
+  if (path === 'bestAttenders') return handleBestAttenders(e);
   return jsonOutput({error: 'Unknown GET endpoint', path});
 }
 
@@ -274,6 +275,40 @@ function handleGetDates(e) {
   const headers = headerRow(sheet);
   const dates = headers.filter(h => h && String(h).match(/^\d{4}-\d{2}-\d{2}$/));
   return jsonOutput({dates: dates});
+}
+
+function handleBestAttenders(e) {
+  const group = e && e.parameter && e.parameter.group === 'RFF' ? 'RFF' : 'Church';
+  const sheet = getSheet(group);
+  const cols = getStudentColumnMap(sheet);
+  const headers = cols.headers.map(header => String(header).trim());
+  const attendanceColumns = [];
+  headers.forEach((header, index) => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(header)) attendanceColumns.push(index);
+  });
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2 || !attendanceColumns.length) {
+    return jsonOutput({group, totalDays: attendanceColumns.length, list: []});
+  }
+
+  const values = sheet.getRange(2, 1, lastRow - 1, sheet.getLastColumn()).getValues();
+  const list = values.map(row => {
+    const name = String(row[cols.nameCol - 1] || '').trim();
+    if (!name) return null;
+
+    const studentClass = String(row[cols.classCol - 1] || '').trim();
+    const daysAttended = attendanceColumns.reduce((total, index) =>
+      total + (String(row[index] || '').trim() === 'Present' ? 1 : 0), 0);
+    return {name, class: studentClass, daysAttended};
+  }).filter(student => student && student.daysAttended > 0);
+
+  list.sort((a, b) => b.daysAttended - a.daysAttended || a.name.localeCompare(b.name));
+  return jsonOutput({
+    group,
+    totalDays: attendanceColumns.length,
+    list: list.slice(0, 5)
+  });
 }
 
 function handleGenerateReport(e) {

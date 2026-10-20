@@ -186,6 +186,13 @@ tr:hover { background: #f8f9ff; }
 .birthday-day li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.35rem 1rem; padding: 0.85rem 1rem; border-top: 1px solid #e5e9f4; }
 .birthday-name { color: #263b3e; font-weight: 600; }
 .birthday-class { color: #667477; }
+.best-attenders-summary { margin-bottom: 1rem; color: #526466; font-weight: 600; }
+.best-attenders-list { display: grid; gap: 0.75rem; padding: 0; list-style: none; }
+.best-attender-item { display: grid; grid-template-columns: 2.5rem minmax(0, 1fr) auto; align-items: center; gap: 0.85rem; padding: 1rem; border: 1px solid #e5e9f4; border-radius: 10px; background: #fbfcff; }
+.best-attender-rank { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border-radius: 50%; color: white; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-weight: 700; }
+.best-attender-name { color: #263b3e; font-weight: 700; }
+.best-attender-class { margin-top: 0.2rem; color: #667477; font-size: 0.9rem; }
+.best-attender-days { color: #526466; font-weight: 700; white-space: nowrap; }
 @media (max-width: 640px) {
   body { padding: 0.5rem; }
   .container { min-height: calc(100vh - 1rem); min-height: calc(100dvh - 1rem); grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto 1fr; border-radius: 12px; }
@@ -206,6 +213,8 @@ tr:hover { background: #f8f9ff; }
   .type-toggle { flex-direction: column; gap: 0.5rem; }
   .button-group { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 0.6rem; }
   .button-group button { width: 100%; min-width: 0; min-height: 48px; padding: 0.75rem 0.45rem; font-size: 0.92rem; }
+  .best-attender-item { grid-template-columns: 2.25rem minmax(0, 1fr); gap: 0.65rem; }
+  .best-attender-days { grid-column: 2; }
   table { font-size: 0.85rem; }
   th, td { padding: 0.6rem 0.4rem; }
 }
