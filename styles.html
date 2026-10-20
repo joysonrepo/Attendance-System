@@ -178,6 +178,14 @@ th { color: white; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)
 tr:hover { background: #f8f9ff; }
 .flex-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; }
 .pill { padding: 0.5rem 1rem; border-radius: 20px; color: white; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); font-size: 0.9rem; font-weight: 600; }
+.birthday-summary { margin-bottom: 1rem; color: #526466; font-weight: 600; }
+.birthday-list { display: grid; gap: 1rem; }
+.birthday-day { overflow: hidden; border: 1px solid #e5e9f4; border-radius: 10px; background: #fbfcff; }
+.birthday-day h3 { padding: 0.85rem 1rem; color: #263b3e; background: #f0f2ff; font-size: 1rem; }
+.birthday-day ul { list-style: none; }
+.birthday-day li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.35rem 1rem; padding: 0.85rem 1rem; border-top: 1px solid #e5e9f4; }
+.birthday-name { color: #263b3e; font-weight: 600; }
+.birthday-class { color: #667477; }
 @media (max-width: 640px) {
   body { padding: 0.5rem; }
   .container { min-height: calc(100vh - 1rem); min-height: calc(100dvh - 1rem); grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto 1fr; border-radius: 12px; }

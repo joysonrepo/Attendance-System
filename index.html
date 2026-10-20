@@ -20,6 +20,8 @@
         <a id="churchReportLink" href="#" title="Church Reports"><span class="nav-label">Church Reports</span><span class="nav-short" aria-hidden="true">CR</span></a>
         <a id="rffAttendanceLink" href="#" title="RFF Attendance"><span class="nav-label">RFF Attendance</span><span class="nav-short" aria-hidden="true">RA</span></a>
         <a id="rffReportLink" href="#" title="RFF Reports"><span class="nav-label">RFF Reports</span><span class="nav-short" aria-hidden="true">RR</span></a>
+        <a id="churchBirthdaysLink" href="#" title="Church Birthdays"><span class="nav-label">Church Birthdays</span><span class="nav-short" aria-hidden="true">CB</span></a>
+        <a id="rffBirthdaysLink" href="#" title="RFF Birthdays"><span class="nav-label">RFF Birthdays</span><span class="nav-short" aria-hidden="true">RB</span></a>
       </nav>
     </aside>
     <header class="header">
@@ -37,7 +39,8 @@
     const WEB_APP_BASE = 'https://script.google.com/macros/s/AKfycbxqDvtRZCcVFLKveCwDDYdj3HZikI-dsMlknZyJ2OR9HlkO1Qjd8lSdO9tqEyUsiUnk/exec';
     const params = new URLSearchParams(window.location.search);
     const APP_GROUP = params.get('group') === 'RFF' ? 'RFF' : 'Church';
-    const APP_PAGE = params.get('page') === 'report' ? 'report' : 'attendance';
+    const requestedPage = params.get('page');
+    const APP_PAGE = ['report', 'birthdays'].includes(requestedPage) ? requestedPage : 'attendance';
     const statusElement = document.getElementById('status');
 
     function setStatus(message, isError = false) {
@@ -45,18 +48,22 @@
       statusElement.style.color = isError ? '#c00' : '#0a4a0a';
     }
 
-    const pageTitle = APP_GROUP + (APP_PAGE === 'report' ? ' Reports' : ' Attendance');
+    const pageTitle = APP_GROUP + (APP_PAGE === 'report' ? ' Reports' : APP_PAGE === 'birthdays' ? ' Birthdays' : ' Attendance');
     document.getElementById('pageTitle').textContent = pageTitle;
     document.getElementById('pageSubtitle').textContent = APP_PAGE === 'report'
       ? 'Review attendance by date'
-      : 'Record and manage student attendance';
+      : APP_PAGE === 'birthdays'
+        ? 'See which kids have birthdays today and over the next six days'
+        : 'Record and manage student attendance';
     document.title = 'River Kids ' + pageTitle;
 
     [
       ['churchAttendanceLink', 'Church', 'attendance'],
       ['churchReportLink', 'Church', 'report'],
       ['rffAttendanceLink', 'RFF', 'attendance'],
-      ['rffReportLink', 'RFF', 'report']
+      ['rffReportLink', 'RFF', 'report'],
+      ['churchBirthdaysLink', 'Church', 'birthdays'],
+      ['rffBirthdaysLink', 'RFF', 'birthdays']
     ].forEach(([id, groupName, pageName]) => {
       const link = document.getElementById(id);
       link.href = window.location.pathname + '?group=' + groupName + '&page=' + pageName;
@@ -75,8 +82,12 @@
     });
 
     async function loadSelectedPage() {
-      const viewName = APP_GROUP.toLowerCase() + '-' + (APP_PAGE === 'report' ? 'reports' : 'attendance');
-      const scriptName = APP_PAGE === 'report' ? 'reports-script' : 'attendance-script';
+      const viewName = APP_PAGE === 'birthdays'
+        ? 'birthday'
+        : APP_GROUP.toLowerCase() + '-' + (APP_PAGE === 'report' ? 'reports' : 'attendance');
+      const scriptName = APP_PAGE === 'birthdays'
+        ? 'birthday-script'
+        : APP_PAGE === 'report' ? 'reports-script' : 'attendance-script';
       const [styleResponse, viewResponse, scriptResponse] = await Promise.all([
         fetch('./styles.html'),
         fetch('./' + viewName + '.html'),

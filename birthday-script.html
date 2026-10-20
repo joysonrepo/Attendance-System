@@ -1,0 +1,118 @@
+<script>
+const birthdayList = document.getElementById('birthdayList');
+const birthdaySummary = document.getElementById('birthdaySummary');
+
+function parseBirthday(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+
+  let year;
+  let month;
+  let day;
+  let match = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (match) {
+    year = Number(match[1]);
+    month = Number(match[2]);
+    day = Number(match[3]);
+  } else {
+    match = raw.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+    if (match) {
+      day = Number(match[1]);
+      month = Number(match[2]);
+      year = Number(match[3]);
+    } else {
+      match = raw.match(/^(?:[A-Za-z]{3}\s+)?([A-Za-z]{3,})\s+(\d{1,2})\s+(\d{4})/);
+      if (match) {
+        const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        month = monthNames.indexOf(match[1].slice(0, 3).toLowerCase()) + 1;
+        day = Number(match[2]);
+        year = Number(match[3]);
+      } else {
+        const parsed = new Date(raw);
+        if (Number.isNaN(parsed.getTime())) return null;
+        year = parsed.getFullYear();
+        month = parsed.getMonth() + 1;
+        day = parsed.getDate();
+      }
+    }
+  }
+
+  const check = new Date(year, month - 1, day);
+  if (check.getFullYear() !== year || check.getMonth() !== month - 1 || check.getDate() !== day) return null;
+  return { month, day };
+}
+
+function birthdayDayLabel(date, offset) {
+  if (offset === 0) return 'Today';
+  if (offset === 1) return 'Tomorrow';
+  return new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(date);
+}
+
+function renderBirthdays(roster) {
+  const today = new Date();
+  const studentsWithBirthdays = roster.map(student => ({
+    student,
+    birthday: parseBirthday(student.dateOfBirth || student.dob)
+  }));
+  const days = Array.from({ length: 7 }, (_, offset) => {
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
+    return {
+      date,
+      offset,
+      students: studentsWithBirthdays
+        .filter(entry => entry.birthday && entry.birthday.month === date.getMonth() + 1 && entry.birthday.day === date.getDate())
+        .map(entry => entry.student)
+    };
+  });
+  const birthdayCount = days.reduce((total, day) => total + day.students.length, 0);
+
+  birthdaySummary.textContent = birthdayCount
+    ? birthdayCount + (birthdayCount === 1 ? ' birthday in the next seven days.' : ' birthdays in the next seven days.')
+    : 'No birthdays today or in the next six days.';
+  birthdayList.replaceChildren();
+
+  days.filter(day => day.students.length).forEach(day => {
+    const section = document.createElement('section');
+    section.className = 'birthday-day';
+
+    const heading = document.createElement('h3');
+    heading.textContent = birthdayDayLabel(day.date, day.offset) + ' · ' +
+      new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric' }).format(day.date);
+    section.appendChild(heading);
+
+    const list = document.createElement('ul');
+    day.students.forEach(student => {
+      const item = document.createElement('li');
+      const name = document.createElement('span');
+      name.className = 'birthday-name';
+      name.textContent = student.name || 'Unnamed student';
+
+      const studentClass = document.createElement('span');
+      studentClass.className = 'birthday-class';
+      studentClass.textContent = student.class ? 'Class ' + student.class : 'Class not listed';
+
+      item.append(name, studentClass);
+      list.appendChild(item);
+    });
+    section.appendChild(list);
+    birthdayList.appendChild(section);
+  });
+}
+
+async function loadBirthdays() {
+  setStatus('Loading student birthdays...');
+  try {
+    const response = await fetch(WEB_APP_BASE + '?path=students&group=' + encodeURIComponent(APP_GROUP));
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const payload = await response.json();
+    const roster = Array.isArray(payload) ? payload : (payload && Array.isArray(payload.list) ? payload.list : null);
+    if (!roster) throw new Error('The student list response was invalid.');
+    renderBirthdays(roster);
+    setStatus('');
+  } catch (error) {
+    setStatus('Failed to load student birthdays: ' + error.message, true);
+  }
+}
+
+loadBirthdays();
+</script>
